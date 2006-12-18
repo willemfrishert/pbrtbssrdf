@@ -20,6 +20,9 @@ public:
 				 const Point *P, const Normal *N,
 				 const Vector *S, const float *uv);
 	~TriangleMesh();
+
+	virtual void GetUniformPointSamples(vector<Point>& container) const;
+
 	BBox ObjectBound() const;
 	BBox WorldBound() const;
 	bool CanIntersect() const { return false; }
@@ -128,7 +131,8 @@ private:
 TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
 		int nt, int nv, const int *vi, const Point *P,
 		const Normal *N, const Vector *S, const float *uv)
-	: Shape(o2w, ro) {
+	: Shape(o2w, ro) 
+{
 	ntris = nt;
 	nverts = nv;
 	vertexIndex = new int[3 * ntris];
@@ -161,13 +165,16 @@ TriangleMesh::~TriangleMesh() {
 	delete[] n;
 	delete[] uvs;
 }
-BBox TriangleMesh::ObjectBound() const {
+
+BBox TriangleMesh::ObjectBound() const 
+{
 	BBox bobj;
 	for (int i = 0; i < nverts; i++)
 		bobj = Union(bobj, WorldToObject(p[i]));
 	return bobj;
 }
-BBox TriangleMesh::WorldBound() const {
+BBox TriangleMesh::WorldBound() const 
+{
 	BBox worldBounds;
 	for (int i = 0; i < nverts; i++)
 		worldBounds = Union(worldBounds, p[i]);
@@ -175,14 +182,24 @@ BBox TriangleMesh::WorldBound() const {
 }
 void
 TriangleMesh::Refine(vector<Reference<Shape> > &refined)
-const {
+const 
+{
 	for (int i = 0; i < ntris; ++i)
 		refined.push_back(new Triangle(ObjectToWorld,
 		                               reverseOrientation,
                                        (TriangleMesh *)this,
 									   i));
 }
-BBox Triangle::ObjectBound() const {
+
+virtual void TriangleMesh::GetUniformPointSamples(std::vector<Point> &container) const
+{
+	// TODO: fill me :P
+}
+
+// ###################### Triangle class #############################
+
+BBox Triangle::ObjectBound() const 
+{
 	// Get triangle vertices in _p1_, _p2_, and _p3_
 	const Point &p1 = mesh->p[v[0]];
 	const Point &p2 = mesh->p[v[1]];
@@ -190,15 +207,19 @@ BBox Triangle::ObjectBound() const {
 	return Union(BBox(WorldToObject(p1), WorldToObject(p2)),
 		WorldToObject(p3));
 }
-BBox Triangle::WorldBound() const {
+
+BBox Triangle::WorldBound() const 
+{
 	// Get triangle vertices in _p1_, _p2_, and _p3_
 	const Point &p1 = mesh->p[v[0]];
 	const Point &p2 = mesh->p[v[1]];
 	const Point &p3 = mesh->p[v[2]];
 	return Union(BBox(p1, p2), p3);
 }
+
 bool Triangle::Intersect(const Ray &ray, float *tHit,
-		DifferentialGeometry *dg) const {
+		DifferentialGeometry *dg) const 
+{
 	// Initialize triangle intersection statistics
 	static
 	StatsPercentage triangleHits("Geometry",
