@@ -118,6 +118,18 @@ GeometricPrimitive::GetBSDF(const DifferentialGeometry &dg,
 		dg, &dgs);
 	return material->GetBSDF(dg, dgs);
 }
+
+Reference<Material>& GeometricPrimitive::getMaterial()
+{
+	return this->material;
+}
+
+Reference<Shape>& GeometricPrimitive::getShape()
+{
+	return this->shape;
+}
+
+
 // Intersection Method Definitions
 BSDF *Intersection::GetBSDF(const RayDifferential &ray)
 		const {

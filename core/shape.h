@@ -92,6 +92,10 @@ public:
 		if (AbsDot(dgLight.nn, -wi) == 0.f) pdf = INFINITY; // NOBOOK
 		return pdf;
 	}
+
+	// returns an array of uniform sampled points over the current shape
+	virtual void GetUniformPointSamples(vector<Point>& container) const;
+
 	// Shape Public Data
 	const Transform ObjectToWorld, WorldToObject;
 	const bool reverseOrientation, transformSwapsHandedness;

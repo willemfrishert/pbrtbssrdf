@@ -56,6 +56,10 @@ public:
 	const AreaLight *GetAreaLight() const;
 	BSDF *GetBSDF(const DifferentialGeometry &dg,
 	              const Transform &WorldToObject) const;
+
+	Reference<Shape>& getShape();
+	Reference<Material>& getMaterial();
+
 private:
 	// GeometricPrimitive Private Data
 	Reference<Shape> shape;
