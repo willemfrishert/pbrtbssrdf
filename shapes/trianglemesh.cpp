@@ -25,8 +25,8 @@ public:
 				 const Vector *S, const float *uv);
 	~TriangleMesh();
 
-	virtual void GetUniformPointSamples(vector<Point>& container) const;
-
+//	virtual void GetUniformPointSamples(vector<Point>& container) const;
+	virtual void GetUniformPointSamples(vector<std::pair<Point, Normal > >& container) const;
 	BBox ObjectBound() const;
 	BBox WorldBound() const;
 	bool CanIntersect() const { return false; }
@@ -203,10 +203,11 @@ TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
 	for (int i  = 0; i < nverts; ++i)
 		p[i] = ObjectToWorld(P[i]);
 
-	vector<Point> container;
-	this->GetUniformPointSamples(container);
+	//vector<std::pair<Point, Normal > > container;
+	//this->GetUniformPointSamples(container);
 }
-TriangleMesh::~TriangleMesh() {
+TriangleMesh::~TriangleMesh()
+{
 	delete[] vertexIndex;
 	delete[] p;
 	delete[] s;
@@ -218,7 +219,10 @@ BBox TriangleMesh::ObjectBound() const
 {
 	BBox bobj;
 	for (int i = 0; i < nverts; i++)
+	{
 		bobj = Union(bobj, WorldToObject(p[i]));
+	}
+
 	return bobj;
 }
 
@@ -226,20 +230,25 @@ BBox TriangleMesh::WorldBound() const
 {
 	BBox worldBounds;
 	for (int i = 0; i < nverts; i++)
+	{
 		worldBounds = Union(worldBounds, p[i]);
+	}
+
 	return worldBounds;
 }
 
 void TriangleMesh::Refine(vector<Reference<Shape> > &refined) const 
 {
 	for (int i = 0; i < ntris; ++i)
+	{
 		refined.push_back(new Triangle(ObjectToWorld,
 		                               reverseOrientation,
                                        (TriangleMesh *)this,
 									   i));
+	}
 }
 
-void TriangleMesh::GetUniformPointSamples(std::vector<Point> &container) const
+void TriangleMesh::GetUniformPointSamples(vector<std::pair<Point, Normal > >& container) const
 {
 	// TODO: fill me :P
 
@@ -255,26 +264,26 @@ void TriangleMesh::GetUniformPointSamples(std::vector<Point> &container) const
 
 	// Point repulsion technique
 
-	int numberOfSamplePoints = 200;
+	//int numberOfSamplePoints = 200;
 
-	vector<Reference<Shape> > triangleList;
-	this->Refine( triangleList );
+	//vector<Reference<Shape> > triangleList;
+	//this->Refine( triangleList );
 
-	int xSamples = static_cast<int>( ceil( sqrt( static_cast<float>(numberOfSamplePoints) ) ) );
-	int ySamples = xSamples;
+	//int xSamples = static_cast<int>( ceil( sqrt( static_cast<float>(numberOfSamplePoints) ) ) );
+	//int ySamples = xSamples;
 
-	float* samples = new float[xSamples*ySamples];
+	//float* samples = new float[xSamples*ySamples];
 
-	StratifiedSample2D(samples, xSamples, ySamples, true);
+	//StratifiedSample2D(samples, xSamples, ySamples, true);
 
-	for (int i=0; i<xSamples*ySamples; i++)
-	{
-		std::cout << i << " : "<< samples[i] << std::endl;
-	}
-		
+	//for (int i=0; i<xSamples*ySamples; i++)
+	//{
+	//	std::cout << i << " : "<< samples[i] << std::endl;
+	//}
+	//	
 
 
-	delete[] samples;
+	//delete[] samples;
 }
 
 // ###################### Triangle Method Definitions #############################
