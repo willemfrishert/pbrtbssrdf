@@ -119,10 +119,11 @@ public:
 		return pdf;
 	}
 
-	// returns an array of uniform sampled points over the current shape
-	virtual void GetUniformPointSamples(vector<Point>& container) const
+	// returns an array of pairs of uniform sampled points with their normal over the current shape
+	virtual void GetUniformPointSamples(vector<std::pair<Point, Normal > >& container) const
 	{
-		container.clear();
+		Severe("Unimplemented Shape::GetUniformPointSamples method called");
+		return;
 	}
 
 	// Shape Public Data
