@@ -98,8 +98,13 @@ GeometricPrimitive::
 	: shape(s), material(m), areaLight(a) {
 }
 bool GeometricPrimitive::Intersect(const Ray &r,
-		Intersection *isect) const {
+		Intersection *isect) const 
+{
+	// ### Parametric distance along the ray, if any intersection is found	
 	float thit;
+
+	// ### Intersection information stored in 'dg' 
+	// ### which contains the local geometric properties of the surface
 	if (!shape->Intersect(r, &thit, &isect->dg))
 		return false;
 	isect->primitive = this;
