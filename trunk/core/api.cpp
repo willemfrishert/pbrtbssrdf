@@ -53,7 +53,13 @@ RenderOptions::RenderOptions() {
 	SurfIntegratorName = "directlighting";
 	VolIntegratorName = "emission";
 	CameraName = "perspective";
+	//char *searchEnv = getenv("PBRT_SEARCHPATH");
+#ifdef _DEBUG
+	char *searchEnv = getenv("PBRT_SEARCHPATH_DEBUG");
+#else
 	char *searchEnv = getenv("PBRT_SEARCHPATH");
+#endif
+
 	if (searchEnv == NULL) {
 		Warning("PBRT_SEARCHPATH not set in your environment.\n"
 			  "pbrt won't be able to find plugins if "
