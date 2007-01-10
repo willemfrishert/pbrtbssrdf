@@ -93,8 +93,13 @@ KdTree<NodeData, LookupProc>::recursiveBuild(u_int nodeNum,
 		bound = Union(bound, buildNodes[i]->p);
 	int splitAxis = bound.MaximumExtent();
 	int splitPos = (start+end)/2;
+
 	std::nth_element(&buildNodes[start], &buildNodes[splitPos],
-		&buildNodes[end], CompareNode<NodeData>(splitAxis));
+		&buildNodes[end-1], CompareNode<NodeData>(splitAxis));
+
+	//std::nth_element(&buildNodes[start], &buildNodes[splitPos],
+	//	&buildNodes[end], CompareNode<NodeData>(splitAxis));
+	
 	// Allocate kd-tree node and continue recursively
 	nodes[nodeNum].init(buildNodes[splitPos]->p[splitAxis],
 		splitAxis);
