@@ -14,6 +14,8 @@
 
 #include "core/sampling.h"
 
+#include "PointRepulsion.h"
+
 // ###################### TriangleMesh class #############################
 class TriangleMesh : public Shape 
 {
@@ -199,10 +201,14 @@ TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
 		memcpy(s, S, nverts*sizeof(Vector));
 	}
 	else s = NULL;
+
 	// Transform mesh vertices to world space
 	for (int i  = 0; i < nverts; ++i)
 		p[i] = ObjectToWorld(P[i]);
 
+	//// Transform mesh vertices to world space
+	//for (int i  = 0; i < nverts; ++i)
+	//	p[i] = P[i];
 	//vector<std::pair<Point, Normal > > container;
 	//this->GetUniformPointSamples(container);
 }
@@ -264,7 +270,7 @@ void TriangleMesh::GetUniformPointSamples(vector<std::pair<Point, Normal > >& co
 
 	// Point repulsion technique
 
-	//int numberOfSamplePoints = 200;
+	int numberOfSamplePoints = 200;
 
 	//vector<Reference<Shape> > triangleList;
 	//this->Refine( triangleList );
@@ -284,6 +290,9 @@ void TriangleMesh::GetUniformPointSamples(vector<std::pair<Point, Normal > >& co
 
 
 	//delete[] samples;
+
+	//PointRepulsion PointRepulsion(ntris, nverts, vertexIndex, p, numberOfSamplePoints);
+
 }
 
 // ###################### Triangle Method Definitions #############################
