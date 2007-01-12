@@ -92,9 +92,13 @@ private:
 };
 class COREDLL Aggregate : public Primitive {
 public:
+	
 	// Aggregate Public Methods
 	const AreaLight *GetAreaLight() const;
 	BSDF *GetBSDF(const DifferentialGeometry &dg,
 	              const Transform &) const;
+
+	// Utility functions
+	virtual void Refine(vector<Reference<Primitive> > &refined) const {};
 };
 #endif // PBRT_PRIMITIVE_H
