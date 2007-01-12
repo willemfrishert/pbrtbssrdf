@@ -206,12 +206,17 @@ Spectrum IrradianceCache::IndirectLo(const Point &p,
 	if (bsdf->NumComponents(flags) == 0)
 		return Spectrum(0.);
 	Spectrum E;
-	if (!InterpolateIrradiance(scene, p, n, &E)) {
+
+	if (!InterpolateIrradiance(scene, p, n, &E)) 
+	{
 		// Compute irradiance at current point
 		u_int scramble[2] = { RandomUInt(), RandomUInt() };
 		float sumInvDists = 0.;
-		for (int i = 0; i < nSamples; ++i) {
 
+		// Sampling the hemisphere computing the radiance for n sample directions 
+		// in order to compute the irradiance
+		for (int i = 0; i < nSamples; ++i) 
+		{
 			// Trace ray to sample radiance for irradiance estimate
 			// Update irradiance statistics for rays traced
 			static StatsCounter nIrradiancePaths("Irradiance Cache",
@@ -229,7 +234,8 @@ Spectrum IrradianceCache::IndirectLo(const Point &p,
 				Spectrum pathThroughput = 1.;
 				RayDifferential ray(r);
 				bool specularBounce = false;
-				for (int pathLength = 0; ; ++pathLength) {
+				for (int pathLength = 0; ; ++pathLength) 
+				{
 					// Find next vertex of path
 					Intersection isect;
 					if (!scene->Intersect(ray, &isect))
@@ -237,11 +243,14 @@ Spectrum IrradianceCache::IndirectLo(const Point &p,
 					if (pathLength == 0)
 						r.maxt = ray.maxt;
 					pathThroughput *= scene->Transmittance(ray);
+
 					// Possibly add emitted light at path vertex
 					if (specularBounce)
 						L += pathThroughput * isect.Le(-ray.d);
+
 					// Evaluate BSDF at hit point
 					BSDF *bsdf = isect.GetBSDF(ray);
+
 					// Sample illumination from lights to find path contribution
 					const Point &p = bsdf->dgShading.p;
 					const Normal &n = bsdf->dgShading.nn;
@@ -249,6 +258,7 @@ Spectrum IrradianceCache::IndirectLo(const Point &p,
 					L += pathThroughput *
 						UniformSampleOneLight(scene, p, n, wo, bsdf, sample);
 					if (pathLength+1 == maxIndirectDepth) break;
+
 					// Sample BSDF to get new path direction
 					// Get random numbers for sampling new direction, \mono{bs1}, \mono{bs2}, and \mono{bcs}
 					float bs1 = RandomFloat(), bs2 = RandomFloat(), bcs = RandomFloat();
