@@ -15,8 +15,10 @@
 #include "scene.h"
 #include "mc.h"
 #include "kdtree.h"
-#include "octree.h"
 #include "sampling.h"
+#include "trianglemesh.h"
+#include "bssrdfmaterial.h"
+#include "exoctree.h"
 #include "bssrdfintegrator.h"
 
 using std::pair;
@@ -65,59 +67,7 @@ struct ClosePhoton
 	float distanceSquared;
 };
 
-/************************************************************************/
-/*                                                                      */
-/************************************************************************/
-struct IrradBSSRDFProcess
-{
-	// IrradBSSRDFProcess Public Methods
-	IrradBSSRDFProcess(/*const Normal &N, float me*/)
-	{
-		//n = N;
-		//maxError = me;
-		//nFound = samplesChecked = 0;
-		//sumWt = 0.;
-		//E = 0.;
-	}
-	
-	void operator()(const Point &P, const IrradBSSRDFSample &sample) const;
-	
-	//bool Successful() 
-	//{
-	//	return (sumWt > 0. && nFound > 0);
-	//}
-	
-	//Spectrum GetIrradiance() const { return E / sumWt; }
-	
-	//Normal n;
-	//float maxError;
-	//mutable int nFound, samplesChecked;
-	//mutable float sumWt;
-	//mutable Spectrum E;
-};
 
-struct IrradBSSRDFSample
-{
-	// IrradBSSRDFSample Constructor
-	IrradBSSRDFSample() { }
-
-	IrradBSSRDFSample(const Spectrum &e, const Point &P, const float& a)
-		: Ev(e), Pv(P), Av(a)
-	{ }
-
-
-	// The total irradiance on the node
-	Spectrum Ev;
-
-	// The total area represented by the point
-	float Av;
-
-	// The average location of the points
-	Point Pv;
-};
-/************************************************************************/
-/*                                                                      */
-/************************************************************************/
 
 
 // Photonmap Method Definitions
@@ -256,52 +206,23 @@ Spectrum BSSRDFIntegrator::ComputeRadianceEstimateAlongRay( RayDifferential& r, 
 }
 
 /**
- * @description Computes the initial BSDF for a given point on a given shape. It mainly uses 
- * the methods implemented in PBRT that compute the intersection between a ray and the scene.
+ * @description Computes the initial BSDF for a given point on a given shape using
+ * a snippet from Triangle::Intersect().
  *
- * @param p the point
- * @param n the normal
- * @param shape the shape
- * @return the BSDF
+ * @param p
+ * @param n
+ * @param shape
+ * @param material
+ * @return 
  */
-BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n, 
-										   Reference<GeometricPrimitive>& primitive ) const
+BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n, Reference<Triangle>& shape, 
+										   Reference<Material>& material ) const
 {
-	// Create an imaginary ray that will intersect the object exactly at the
-	// point we want: heavy, but it makes use of the existent framework
-	// and of polymorphism: each shape will compute it's differential geometry
+	DifferentialGeometry dg;
+	shape->GetDifferentialGeometry(p, &dg);
 
-	// The direction is the opposite of the normal: pointing towards the object
-	Vector v( -n );
-	RayDifferential ray(p, v);
-	Intersection intersect;
-	float dummie;
-
-	/************************************************************************/
-	/* REMOVE ME: JUST UNTIL i'VE GOT THE POINTS FROM WILL :P               */
-	/************************************************************************/
-	vector< Reference<Primitive> > dummieTris;
-	primitive->Refine( dummieTris );
-
-	vector< Reference<Primitive> >::iterator dummieTrisIt = dummieTris.begin();
-	bool hit = false;
-	
-	for (; ! hit && (dummieTrisIt != dummieTris.end()); dummieTrisIt++)
-	{
-		hit = (*dummieTrisIt)->Intersect(ray, &intersect);
-	}
-	
-
-
-	/************************************************************************/
-	/*                                                                      */
-	/************************************************************************/
-
-	// Do the same as it would be done on Scene::Intersection
-	// just to get the DifferentialGeometry
-	//bool hit = shape->Intersect(ray, &dummie, &intersect.dg);
-
-	return intersect.GetBSDF( ray );
+	// *** IF WE SUPPOSE THAT THE OBJECT DOESN'T CONTAIN ANY s OR n values
+	return material->GetBSDF(dg, dg);
 }
 
 /**
@@ -310,18 +231,19 @@ BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n,
  * @param p
  * @param n
  * @param pArea
- * @param shape
- * @param flags
- * @param sample
+ * @param triangle
+ * @param material
  * @param scene
  */
 void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float pArea, 
-										 Reference<GeometricPrimitive>& primitive, const Scene *scene )
+										 Reference<Triangle>& triangle, Reference<Material>& material, 
+										 const Scene *scene )
 {
 	Spectrum E;
 
 	// Compute irradiance at current point
 	u_int scramble[2] = { RandomUInt(), RandomUInt() };
+	
 	// ### distance before ray intersects object: used to estimate
 	// ### how widely reusable irradiance estimate is
 	float sumInvDists = 0.;
@@ -331,7 +253,7 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 
 	// *********************** ############## ********************/
 	// COMPUTING THE TEMPORARY BSDF
-	BSDF *bsdf = ComputeInitialBSDF(p, n, primitive);
+	BSDF *bsdf = ComputeInitialBSDF(p, n, triangle, material );
 
 	// ??? I have the idea they're sampling the hemisphere
 	// , computing the radiance for n sample directions in order to
@@ -356,15 +278,15 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 		// ### flip ray if going on the wrong direction
 		if (Dot(r.d, n) < 0) r.d = -r.d;
 
-		// Do path tracing to compute radiance along ray for estimate
+		// ### Do path tracing to compute radiance along ray for estimate
 		E += ComputeRadianceEstimateAlongRay(r, scene);
 
 		float dist = r.maxt * r.d.Length();
 		sumInvDists += 1.f / dist;
 	}
 
-	// ### Finally, estimate the irradiance based on
-	// ### cosine-weighted distribution of directions
+	// ### Finally, estimate the irradiance based on cosine-weighted distribution 
+	// ### of directions: see Monte Carlo basic Estimator
 	E *= M_PI / float(nSamples);
 
 	// Add computed irradiance value to cache
@@ -373,32 +295,36 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 		"Irradiance estimates computed");
 	++nSamplesComputed;
 
-	//// Compute bounding box of irradiance sample's contribution region
+	// Compute bounding box (volume) of irradiance sample's contribution region
 	BBox sampleExtent( p );
 
 	// ### Compute the corners of the BB given a circle radius
-	// ### Hypotenuse = sqrt(c^2 + c^2) = c * sqrt(2)
-	sampleExtent.Expand( pArea * 1.414213562373095f );
+	// ### Radius of Area = sqrt(Area / PI) -> Half side of the cube
+	float radius = sqrt( pArea / M_PI );
+	sampleExtent.Expand( radius );
 
 	IrradBSSRDFSample irradSample(E, p, pArea);
-	this->bssrdfIrradianceValues->Add(irradSample, sampleExtent);
+	IrradBSSRDFProcess irradProcess;
+	this->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
+	this->bssrdfIrradianceValues->Lookup(p, irradProcess);
 }
 
 /**
+ * @description Computes the irradiance values for all the BSSRDF objects in the scene
+ *
  * @param scene
  */
-void BSSRDFIntegrator::SampleBSSRDFIrradianceValues(const Scene *scene)
+void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 {
 	vector<Point> container;
 	BBox wb = scene->WorldBound();
 
-	/************************************************************************/
-	/* COPIED FROM IRRADIANCE CACHE: WHY DO THIS? TO EXTEND THE BB MORE??   */
-	/************************************************************************/
+	// Compute scene's BB, and extend it a little more 
+	// (due to floating-point errors in scene intersections - p. 765): like in the IrradianceCache class
 	Vector delta = 0.01f * (wb.pMax - wb.pMin);
 	wb.pMin -= delta;
 	wb.pMax += delta;
-	this->bssrdfIrradianceValues = new Octree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb);
+	this->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb);
 
 	// Fetch all the BSSRDF-type objects from the scene
 	//vector< Reference<Shape> > bssrdfObjects;
@@ -417,9 +343,17 @@ void BSSRDFIntegrator::SampleBSSRDFIrradianceValues(const Scene *scene)
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
 		primitive->getShape()->GetUniformPointSamples( container );
 
+		Reference<Material> bssrdfMaterial = primitive->getMaterial();
+
 		// TODO: substitute 'dummie' by 'container'
 		vector< pair<Point, Normal> > dummie;
 		vector< pair<Point, Normal> >::iterator pointIt = dummie.begin();
+		Reference<Shape> mesh = primitive->getShape();
+		vector< Reference<Shape> > tris;
+		mesh->Refine( tris );
+
+		Reference<Triangle> triangle = static_cast<Triangle*>(tris[0].operator ->());
+
 
 		// compute irradiance at all points in the container
 		// XXX: Get the new version from the Repo
@@ -427,7 +361,11 @@ void BSSRDFIntegrator::SampleBSSRDFIrradianceValues(const Scene *scene)
 		//{
 		//	ComputeIrradiance(pointIt->first, pointIt->second, 1.00000000000000f, shape, scene);
 		//}
-		ComputeIrradiance(Point(0.05f, 0.01f, 0.0f), Normal(0, 0, 1), 1.00000000000000f, primitive, scene);
+		float dummieRadius = 0.001f;
+		float dummieArea = M_PI * dummieRadius * dummieRadius;
+
+		ComputeIrradiance(Point(0.05f, 0.01f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
+			bssrdfMaterial, scene);
 	}
 
 	
@@ -460,14 +398,8 @@ void BSSRDFIntegrator::FindBSSRDFObjects( const Scene *scene, vector< Reference<
 		{
 			Reference<Material> materialRef = geoPrimitive->getMaterial();
 
-			// XXX: TWO options:
-			// 1st: Create a method which returns an id of the Material type; 
-			//	created at Material, not very extendable
-			// 2nd: Dynamic Cast :P: the problem is the plugin nature. Everything is
-			// on the .cpp files :S
-
-			// using the Jade id ..... very very temporary
-			if ( materialRef->GetId() > 1 )
+			// Testing to see if the material is of BSSRDF type using an uuuugly cast
+			if ( dynamic_cast<BSSRDFMaterial*> (materialRef.operator ->()) )
 			{
 				//Reference<Shape> shapeRef = geoPrimitive->getShape();
 				//container.push_back( shapeRef );
@@ -488,11 +420,8 @@ void BSSRDFIntegrator::Preprocess(const Scene *scene)
 	
 	if (scene->lights.size() == 0) return;
 
-
-	/************************************************************************/
-	/* PRECOMPUTE BSSRDF IRRADIANCE VALUES                                  */
-	/************************************************************************/
-	SampleBSSRDFIrradianceValues( scene );
+	// Precompute the BSSRDF irradiance values for all this kind of objects
+	ComputeBSSRDFIrradianceValues( scene );
 
 	ProgressReporter progress(nCausticPhotons+nDirectPhotons+
 		nIndirectPhotons, "Shooting photons");
@@ -928,11 +857,4 @@ extern "C" DLLEXPORT SurfaceIntegrator *CreateSurfaceIntegrator(const ParamSet &
 	return new BSSRDFIntegrator(nCaustic, nDirect, nIndirect,
 		nUsed, maxDepth, maxDist, finalGather, gatherSamples,
 		directPhotons);
-}
-
-void BSSRDFIntegrator::storeIrradianceSamples(const Shape &bssrdfShape)
-{
-	vector<Point> uniformPoints;
-
-	bssrdfShape.GetUniformPointSamples( uniformPoints );
 }
