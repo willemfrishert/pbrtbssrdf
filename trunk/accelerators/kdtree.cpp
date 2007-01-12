@@ -109,6 +109,10 @@ public:
 		int *prims0, int *prims1, int badRefines = 0);
 	bool Intersect(const Ray &ray, Intersection *isect) const;
 	bool IntersectP(const Ray &ray) const;
+
+	// Utility functions
+	virtual void Refine(vector<Reference<Primitive> > &refined) const;
+
 private:
 	// KdTreeAccel Private Data
 	int isectCost, traversalCost, maxPrims;
@@ -120,6 +124,10 @@ private:
 	int nAllocedNodes, nextFreeNode;
 	BBox bounds;
 	MemoryArena arena;
+
+	// redundant structure: it will hold pointers to 
+	// the objects without any refinement
+	vector<Reference<Primitive > > primitives;
 };
 struct KdToDo {
 	const KdAccelNode *node;
@@ -131,10 +139,19 @@ KdTreeAccel::
 		int icost, int tcost,
 		float ebonus, int maxp, int maxDepth)
 	: isectCost(icost), traversalCost(tcost),
-	maxPrims(maxp), emptyBonus(ebonus) {
+	maxPrims(maxp), emptyBonus(ebonus) 
+{
 	vector<Reference<Primitive > > prims;
+	
+	// Refines all the primitives: e.g., in the case
+	// of a TriangleMesh it splits it into triangles
 	for (u_int i = 0; i < p.size(); ++i)
+	{
+		// copy the reference to the unrefined primitive
+		this->primitives.push_back( p[i] );
 		p[i]->FullyRefine(prims);
+	}
+
 	// Initialize mailboxes for _KdTreeAccel_
 	curMailboxId = 0;
 	nMailboxes = prims.size();
@@ -481,4 +498,12 @@ extern "C" DLLEXPORT Primitive *CreateAccelerator(const vector<Reference<Primiti
 	int maxDepth = ps.FindOneInt("maxdepth", -1);
 	return new KdTreeAccel(prims, isectCost, travCost,
 		emptyBonus, maxPrims, maxDepth);
+}
+
+/**
+ * @param refined the primitives contained on the KdTree
+ */
+void KdTreeAccel::Refine(std::vector<Reference<Primitive> > &refined) const
+{
+	refined = this->primitives;
 }
