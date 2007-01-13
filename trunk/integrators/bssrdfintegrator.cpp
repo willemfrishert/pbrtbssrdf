@@ -295,18 +295,13 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 		"Irradiance estimates computed");
 	++nSamplesComputed;
 
-	// Compute bounding box (volume) of irradiance sample's contribution region
+	// Compute bounding box of irradiance sample: seen as a point mass 
+	// because the hierarchical evaluation will take into account all the samples
 	BBox sampleExtent( p );
-
-	// ### Compute the corners of the BB given a circle radius
-	// ### Radius of Area = sqrt(Area / PI) -> Half side of the cube
-	float radius = sqrt( pArea / M_PI );
-	sampleExtent.Expand( radius );
 
 	IrradBSSRDFSample irradSample(E, p, pArea);
 	IrradBSSRDFProcess irradProcess;
 	this->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
-	//this->bssrdfIrradianceValues->Lookup(p, irradProcess);
 }
 
 /**
@@ -338,12 +333,19 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 
 	DebugBreak();
 
-	for (; primitiveIt != bssrdfObjects.end(); primitiveIt++)
+	Reference<Triangle> triangle;
+	Reference<Triangle> triangle2;
+	Reference<Triangle> triangle3;
+	Reference<Triangle> triangle4;
+
+	Reference<Material> bssrdfMaterial;
+
+	for (int i = 0; primitiveIt != bssrdfObjects.end(); primitiveIt++, i++)
 	{
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
 		primitive->getShape()->GetUniformPointSamples( container );
 
-		Reference<Material> bssrdfMaterial = primitive->getMaterial();
+		bssrdfMaterial = primitive->getMaterial();
 
 		// TODO: substitute 'dummie' by 'container'
 		vector< pair<Point, Normal> > dummie;
@@ -352,8 +354,15 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		vector< Reference<Shape> > tris;
 		mesh->Refine( tris );
 
-		Reference<Triangle> triangle = static_cast<Triangle*>(tris[0].operator ->());
-		Reference<Triangle> triangle2 = static_cast<Triangle*>(tris[1].operator ->());
+		if (i != 0)
+		{
+			triangle = static_cast<Triangle*>(tris[0].operator ->());
+			triangle2 = static_cast<Triangle*>(tris[1].operator ->());
+			triangle3 = static_cast<Triangle*>(tris[2].operator ->());
+		} else
+		{
+			triangle4 = static_cast<Triangle*>(tris[0].operator ->());
+		}
 
 
 		// compute irradiance at all points in the container
@@ -362,17 +371,25 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		//{
 		//	ComputeIrradiance(pointIt->first, pointIt->second, 1.00000000000000f, shape, scene);
 		//}
-		float dummieRadius = 0.001f;
-		float dummieArea = M_PI * dummieRadius * dummieRadius;
-
-		ComputeIrradiance(Point(0.05f, 0.01f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
-			bssrdfMaterial, scene);
-
-		ComputeIrradiance(Point(0.05f, 0.01f, 0.0f), Normal(0, 0, 1), dummieArea, triangle2, 
-			bssrdfMaterial, scene);
 	}
 
-	
+	float dummieRadius = 0.01f;
+	float dummieArea = M_PI * dummieRadius * dummieRadius;
+
+	ComputeIrradiance(Point(0.05f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
+		bssrdfMaterial, scene);
+
+	ComputeIrradiance(Point(0.02f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 50, triangle2, 
+		bssrdfMaterial, scene);
+
+	ComputeIrradiance(Point(0.07f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 100, triangle3, 
+		bssrdfMaterial, scene);
+
+	ComputeIrradiance(Point(-0.5f, 1.0f, -1.0f), Normal(0, 0, 1), dummieArea * 10, triangle4, 
+		bssrdfMaterial, scene);
+
+	IrradBSSRDFProcess irradProcess;
+	this->bssrdfIrradianceValues->Lookup(Point(-0.4f, 1.0f, -1.0f), irradProcess);
 }
 
 /**
