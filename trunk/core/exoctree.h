@@ -10,7 +10,6 @@ template <class ExNodeData> struct ExOctNode
 	ExOctNode() 
 	{
 		childLeaves = 0;
-		childData = NULL;
 
 		for (int i = 0; i < 8; ++i)
 			children[i] = NULL;
@@ -18,8 +17,6 @@ template <class ExNodeData> struct ExOctNode
 	
 	~ExOctNode() 
 	{
-		delete childData;
-
 		for (int i = 0; i < 8; ++i)
 			delete children[i];
 	}
@@ -35,11 +32,6 @@ template <class ExNodeData> struct ExOctNode
 	ExOctNode *children[8];
 	
 	/**
-	 * @description stores average data from its children
-	 */
-	ExNodeData* childData;
-	
-	/**
 	 * @description stores data if it's a leaf node
 	 */
 	vector<ExNodeData> data;
@@ -47,7 +39,7 @@ template <class ExNodeData> struct ExOctNode
 template <class ExNodeData, class LookupProc> class ExOctree {
 public:
 	// ExOctree Public Methods
-	ExOctree(const BBox &b, int md = 16)
+	ExOctree(const BBox &b, int md = 3)
 		: bound(b) {
 			maxDepth = md;
 	}
@@ -58,7 +50,7 @@ public:
 			DistanceSquared(dataBound.pMin, dataBound.pMax), process);
 	}
 	
-	void Lookup(const Point &p, const LookupProc &process) 
+	void Lookup(const Point &p, LookupProc &process) 
 	{
 		if (!bound.Inside(p)) return;
 		lookupPrivate(&root, bound, p, process);
@@ -71,7 +63,10 @@ private:
 		const LookupProc &process, int depth = 0);
 
 	void lookupPrivate(ExOctNode<ExNodeData> *node, const BBox &nodeBound, const Point &P,
-		const LookupProc &process);
+		LookupProc &process);
+
+	void lookupPrivate(ExOctNode<ExNodeData> *node, const Point &P,
+		LookupProc &process);
 
 	void addChildInformation(ExOctNode<ExNodeData> *node, const ExNodeData& dataItem, 
 		const BBox &nodeBound, const BBox &dataBound, const LookupProc &process);
@@ -107,17 +102,13 @@ void ExOctree<ExNodeData, LookupProc>::addChildInformation( ExOctNode<ExNodeData
 template <class ExNodeData, class LookupProc>
 void ExOctree<ExNodeData, LookupProc>::addPrivate(ExOctNode<ExNodeData> *node, const BBox &nodeBound, 
 	const ExNodeData &dataItem, const BBox &dataBound, 
-	float diag2, const LookupProc &process, int depth) 
+	float dataBBSquaredDiagonal, const LookupProc &process, int depth) 
 {
 	// Possibly add data item to current octree node
 	if (depth == maxDepth ||
 		DistanceSquared(nodeBound.pMin,
-		nodeBound.pMax) < diag2) 
+		nodeBound.pMax) < dataBBSquaredDiagonal) 
 	{
-		/************************************************************************/
-		/* HOW TO PROCEED IF IT IS A LEAF NODE??????? PROCESS SHOULD TAKE CARE OF IT
-		/************************************************************************/
-
 		// Adding data to the current child
 		node->data.push_back(dataItem);
 		return;
@@ -151,12 +142,15 @@ void ExOctree<ExNodeData, LookupProc>::addPrivate(ExOctNode<ExNodeData> *node, c
 	over[5] &= (dataBound.pMax.z  > pMid.z);
 	over[7] &= (dataBound.pMax.z  > pMid.z);
 
+	// store the information that is going to be passed to the child nodes
+	addChildInformation(node, dataItem, nodeBound, dataBound, process);
+
 	for (int child = 0; child < 8; ++child) 
 	{
 		// if it doesn't overlap the child, skip the node
 		if (!over[child]) continue;
 
-		if (!node->children[child])
+		if ( ! node->children[child] )
 		{
 			node->children[child] = new ExOctNode<ExNodeData>;
 		}
@@ -170,27 +164,42 @@ void ExOctree<ExNodeData, LookupProc>::addPrivate(ExOctNode<ExNodeData> *node, c
 		childBound.pMin.z = (child & 1) ? pMid.z : nodeBound.pMin.z;
 		childBound.pMax.z = (child & 1) ? nodeBound.pMax.z : pMid.z;
 
-		// otherwise store the information that is going to be passed to this child
-		addChildInformation(node, dataItem, childBound, dataBound, process);
-
 		addPrivate(node->children[child], childBound,
-			dataItem, dataBound, diag2, process, depth+1);
+			dataItem, dataBound, dataBBSquaredDiagonal, process, depth+1);
 	}
 }
+
+template <class ExNodeData, class LookupProc>
+void ExOctree<ExNodeData, LookupProc>::lookupPrivate( 
+	ExOctNode<ExNodeData> *node, const Point &p, LookupProc &process) 
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if( node->children[ i ] != NULL )
+		{
+			// if SO, continue recursion
+			if( process.subdivide(p, node->children[ i ]->data) )
+			{
+				lookupPrivate(node->children[ i ], p, process);
+			}
+				
+			process.evaluate(p, node->data);
+		}
+	}
+}
+
 template <class ExNodeData, class LookupProc>
 void ExOctree<ExNodeData, LookupProc>::lookupPrivate( 
 	ExOctNode<ExNodeData> *node, const BBox &nodeBound,
-	const Point &p, const LookupProc &process) 
+	const Point &p, LookupProc &process) 
 {
-
-	// if the lookup process decides to stop the search
-	// stop it immediatly, otherwise just let the
-	// octree continue the recursion
-	if ( process(p, node->data, node->childData) )
+	/*** ******** MAIN BRANCH ********* ***/
+	if ( node->childLeaves == 0 )
 	{
+		process.evaluate(p, node->data);
 		return;
 	}
-
+	
 	// Determine which octree child node _p_ is inside
 	// Midpoint in a cube
 	Point pMid = .5f * nodeBound.pMin + .5f * nodeBound.pMax;
@@ -208,8 +217,30 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 		childBound.pMax.y = (child & 2) ? nodeBound.pMax.y : pMid.y;
 		childBound.pMin.z = (child & 1) ? pMid.z : nodeBound.pMin.z;
 		childBound.pMax.z = (child & 1) ? nodeBound.pMax.z : pMid.z;
+		
 		lookupPrivate(node->children[child], childBound, p,
 			process);
+	}
+
+	/*** ******** SECONDARY BRANCHES: for hierarchical evaluation ******** ***/
+	for (int i = 0; i < 8; ++i)
+	{
+		// if not the previously followed branch AND it exists
+		if( (i != child) && (node->children[ i ] != NULL) )
+		{
+			// if leaf: evaluate and step to next branch
+			if( node->children[ i ]->childLeaves == 0 )
+			{
+				process.evaluate(p, node->data);
+				continue;
+			} 
+
+			// continue subdivision if process allows that 
+			if( process.subdivide(p, node->children[ i ]->data) )
+			{
+				lookupPrivate(node->children[ i ], p, process);
+			}
+		}
 	}
 }
 #endif // PBRT_EXOCTREE_H
