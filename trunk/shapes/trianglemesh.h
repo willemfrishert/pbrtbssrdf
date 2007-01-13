@@ -7,7 +7,7 @@
 * (See file License.txt for complete license)
 */
 
-//#include "PointRepulsion.h"
+
 
 // ###################### TriangleMesh class #############################
 class TriangleMesh : public Shape 
