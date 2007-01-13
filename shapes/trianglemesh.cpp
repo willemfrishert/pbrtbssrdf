@@ -6,6 +6,8 @@
 #include "core/sampling.h"
 #include "trianglemesh.h"
 
+#include "pointrepulsion.h"
+
 // TriangleMesh Method Definitions
 // ###################### TriangleMesh Method Definitions #############################
 TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
@@ -39,12 +41,13 @@ TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
 	for (int i  = 0; i < nverts; ++i)
 		p[i] = ObjectToWorld(P[i]);
 
-	//// Transform mesh vertices to world space
-	//for (int i  = 0; i < nverts; ++i)
-	//	p[i] = P[i];
-	//vector<std::pair<Point, Normal > > container;
-	//this->GetUniformPointSamples(container);
+	// Undo transformation to world space. Give me a copy of local space to debug :)
+	for (int i  = 0; i < nverts; ++i)
+		p[i] = P[i];
+	vector<std::pair<Point, Normal > > container;
+	this->GetUniformPointSamples(container);
 }
+
 TriangleMesh::~TriangleMesh()
 {
 	delete[] vertexIndex;
@@ -124,7 +127,7 @@ void TriangleMesh::GetUniformPointSamples(vector<std::pair<Point, Normal > >& co
 
 	//delete[] samples;
 
-	//PointRepulsion PointRepulsion(ntris, nverts, vertexIndex, p, numberOfSamplePoints);
+	PointRepulsion PointRepulsion(ntris, nverts, vertexIndex, p, numberOfSamplePoints);
 
 }
 
