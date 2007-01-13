@@ -306,7 +306,7 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 	IrradBSSRDFSample irradSample(E, p, pArea);
 	IrradBSSRDFProcess irradProcess;
 	this->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
-	this->bssrdfIrradianceValues->Lookup(p, irradProcess);
+	//this->bssrdfIrradianceValues->Lookup(p, irradProcess);
 }
 
 /**
@@ -332,7 +332,7 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 	FindBSSRDFObjects(scene, bssrdfObjects);
 
 	/************************************************************************/
-	/*                                                                      */
+	/* x                                                                    */
 	/************************************************************************/
 	vector< Reference<GeometricPrimitive> >::iterator primitiveIt = bssrdfObjects.begin();
 
@@ -353,6 +353,7 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		mesh->Refine( tris );
 
 		Reference<Triangle> triangle = static_cast<Triangle*>(tris[0].operator ->());
+		Reference<Triangle> triangle2 = static_cast<Triangle*>(tris[1].operator ->());
 
 
 		// compute irradiance at all points in the container
@@ -365,6 +366,9 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		float dummieArea = M_PI * dummieRadius * dummieRadius;
 
 		ComputeIrradiance(Point(0.05f, 0.01f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
+			bssrdfMaterial, scene);
+
+		ComputeIrradiance(Point(0.05f, 0.01f, 0.0f), Normal(0, 0, 1), dummieArea, triangle2, 
 			bssrdfMaterial, scene);
 	}
 
