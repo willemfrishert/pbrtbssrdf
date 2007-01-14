@@ -122,8 +122,39 @@ void BSSRDFIntegrator::RequestSamples(Sample *sample,
 	}
 }
 /************************************************************************/
-/* NEW FUNCTIONS - TO BE COPIED TO A HEADER FILE                        */
+/* NEW FUNCTIONS														*/
 /************************************************************************/
+/**
+ * @description ugly function that does a dynamic cast on an object. 
+ * Hammer method used at full strength ;) in PBRT
+ *
+ * @param primitive
+ * @return the object or NULL if is not of the return type
+ */
+inline GeometricPrimitive* BSSRDFIntegrator::Cast(Reference<Primitive>& primitive)
+{
+	Primitive* prim = primitive.operator ->();
+	return dynamic_cast<GeometricPrimitive*> (prim);
+}
+
+/**
+ * @description ugly function that does a dynamic cast on an object. 
+ * Hammer method used at full strength ;) in PBRT
+ *
+ * @param material
+ * @return the object or NULL if is not of the return type
+ */
+inline BSSRDFMaterial* BSSRDFIntegrator::Cast(Reference<Material>& material)
+{
+	Material* mat = material.operator ->();
+	return dynamic_cast<BSSRDFMaterial*> (mat);
+}
+
+/**
+ * @param r
+ * @param scene
+ * @return 
+ */
 Spectrum BSSRDFIntegrator::ComputeRadianceEstimateAlongRay( RayDifferential& r, const Scene *scene ) const
 {
 	Spectrum L(0.0f);
@@ -401,17 +432,19 @@ void BSSRDFIntegrator::FindBSSRDFObjects( const Scene *scene, vector< Reference<
 	vector< Reference< Primitive > > primitives;
 	
 	// Get all the scene primitives by a "primitive" way :P
+	//
+	// *** NOTE: check the KD-tree Refine method ***
 	scene->aggregate->Refine( primitives );
 
 	vector< Reference< Primitive > >::iterator it = primitives.begin();
 
+	// iterate through all the scene unrefined primitives
 	for (; it != primitives.end(); it++)
 	{
 		Reference< Primitive > primitiveRef = *it;
 
 		// such an ugly line of code :S ...
-		Primitive* prim = primitiveRef.operator ->();
-		GeometricPrimitive* geoPrimitive = dynamic_cast<GeometricPrimitive*> (prim);
+		GeometricPrimitive* geoPrimitive = BSSRDFIntegrator::Cast( *it );
 
 		// if truly a geoPrimitive AND the material 
 		// has BSSRDF characteristics
@@ -420,10 +453,8 @@ void BSSRDFIntegrator::FindBSSRDFObjects( const Scene *scene, vector< Reference<
 			Reference<Material> materialRef = geoPrimitive->getMaterial();
 
 			// Testing to see if the material is of BSSRDF type using an uuuugly cast
-			if ( dynamic_cast<BSSRDFMaterial*> (materialRef.operator ->()) )
+			if ( BSSRDFIntegrator::Cast( materialRef ) != NULL )
 			{
-				//Reference<Shape> shapeRef = geoPrimitive->getShape();
-				//container.push_back( shapeRef );
 				container.push_back( geoPrimitive );
 			}
 		}
