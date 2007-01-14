@@ -177,6 +177,10 @@ private:
 	
 	BSDF* ComputeInitialBSDF(const Point& p, const Normal& n, Reference<Triangle>& shape, Reference<Material>& material) const;
 
+	inline static GeometricPrimitive* Cast(Reference<Primitive>& primitive);
+
+	inline static BSSRDFMaterial* Cast(Reference<Material>& material);
+
 	// BSSRDFIntegrator Private Data
 	u_int nCausticPhotons, nIndirectPhotons, nDirectPhotons;
 	u_int nLookup;
