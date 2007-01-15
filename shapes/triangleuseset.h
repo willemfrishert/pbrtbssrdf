@@ -62,10 +62,11 @@ public:
 
 	void AddSamplePoint(SamplePointContainer* aSamplePoint);
 	void DeleteSamplePoint(SamplePointContainer* aSamplePoint);
-	float ComputeArea();
-	Normal ComputeNormal();
-	void AddEdgeNeightbor(Neighbor* aEdgeNeighbor);
-	vector<Neighbor*> GetEdgeNeighbors();
+	float ComputeArea() const;
+	Normal ComputeNormal() const;
+	void AddEdgeNeightbor( Neighbor* aEdgeNeighbor, u_int aPosition );
+	void GetEdgeNeighbors(vector<Neighbor*>& aNeighbor) const;
+	void GetAllEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const;
 	inline int GetTriangleId();
 	Vector GetCentroid();
 
@@ -77,7 +78,7 @@ private:
 	static int triangleCounter;
 
 	int triangleId;
-	vector<Neighbor* > iEdgeNeighbors;
+	Neighbor* iEdgeNeighbors[3];
 	Vector iCentroid;
 	Normal iUnNormalizedNormal;
 };
@@ -87,6 +88,24 @@ inline
 int TriangleUseSet::GetTriangleId()
 {
 	return triangleId;
+}
+
+inline
+Normal TriangleUseSet::ComputeNormal() const
+{
+	return Normalize(iUnNormalizedNormal);
+}
+
+inline
+float TriangleUseSet::ComputeArea() const
+{
+	return iUnNormalizedNormal.Length();
+}
+
+inline
+Vector TriangleUseSet::GetCentroid()
+{
+	return iCentroid;
 }
 
 #endif
