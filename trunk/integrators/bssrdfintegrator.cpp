@@ -17,8 +17,8 @@
 #include "kdtree.h"
 #include "sampling.h"
 #include "trianglemesh.h"
-#include "bssrdfmaterial.h"
 #include "exoctree.h"
+#include "bssrdfmaterial.h"
 #include "bssrdfintegrator.h"
 
 using std::pair;
@@ -125,6 +125,24 @@ void BSSRDFIntegrator::RequestSamples(Sample *sample,
 /* NEW FUNCTIONS														*/
 /************************************************************************/
 /**
+ * @param primitive
+ * @return true if the material contained on this primitive is a translucent, i.e.,
+ * a BSSRDF one.
+ */
+inline bool BSSRDFIntegrator::TranslucentMaterial( Reference<Primitive>& primitive, 
+												   GeometricPrimitive** geoPrim, BSSRDFMaterial** material )
+{
+	*material = NULL;
+	*geoPrim = BSSRDFIntegrator::Cast( primitive );
+	if ( *geoPrim )
+	{
+		*material = BSSRDFIntegrator::Cast( (*geoPrim)->getMaterial() );
+	}
+
+	return ( *material != NULL );
+}
+
+/**
  * @description ugly function that does a dynamic cast on an object. 
  * Hammer method used at full strength ;) in PBRT
  *
@@ -149,6 +167,19 @@ inline BSSRDFMaterial* BSSRDFIntegrator::Cast(Reference<Material>& material)
 	Material* mat = material.operator ->();
 	return dynamic_cast<BSSRDFMaterial*> (mat);
 }
+
+/**
+* @description ugly function that does a dynamic cast on an object. 
+* Hammer method used at full strength ;) in PBRT
+*
+* @param material
+* @return the object or NULL if is not of the return type
+*/
+//inline const BSSRDFMaterial* BSSRDFIntegrator::Cast(const Reference<Material>& material)
+//{
+//	const Material* mat = material.operator ->();
+//	return dynamic_cast<const BSSRDFMaterial*> (mat);
+//}
 
 /**
  * @param r
@@ -279,16 +310,18 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 	// ### how widely reusable irradiance estimate is
 	float sumInvDists = 0.;
 
-	/********* ############ TMP ################### *************/
+	/************************************************************************/
+	/* TODO: PASS THE NUMBER OF SAMPLES ON THE .PBRT FILE                   */
+	/************************************************************************/
 	int nSamples = 256;
 
 	// *********************** ############## ********************/
 	// COMPUTING THE TEMPORARY BSDF
 	BSDF *bsdf = ComputeInitialBSDF(p, n, triangle, material );
 
-	// ??? I have the idea they're sampling the hemisphere
-	// , computing the radiance for n sample directions in order to
-	// compute the irradiance ???
+	// *** INDIRECT ILLUMINATION***
+	// Sample the hemisphere, computing the radiance for n sample 
+	// directions in order to compute the irradiance
 	for (int i = 0; i < nSamples; ++i) 
 	{
 		// Trace ray to sample radiance for irradiance estimate
@@ -320,6 +353,9 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 	// ### of directions: see Monte Carlo basic Estimator
 	E *= M_PI / float(nSamples);
 
+	//// Now, compute the Direct Illumination component
+	
+
 	// Add computed irradiance value to cache
 	// Update statistics for new irradiance sample
 	static StatsCounter nSamplesComputed("Irradiance Cache",
@@ -330,9 +366,20 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 	// because the hierarchical evaluation will take into account all the samples
 	BBox sampleExtent( p );
 
+	/************************************************************************/
+	/* TODO: CHECK THIS PART TO CLEAN/OPTIMIZE: PROC/SAMPLE                 */
+	/************************************************************************/
+
 	IrradBSSRDFSample irradSample(E, p, pArea);
 	IrradBSSRDFProcess irradProcess;
-	this->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
+	
+	BSSRDFMaterial* bssrdfMaterial = BSSRDFIntegrator::Cast( material );
+	//this->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
+
+	// just to make sure :)
+	assert( bssrdfMaterial );
+
+	bssrdfMaterial->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
 }
 
 /**
@@ -343,17 +390,8 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 {
 	vector<Point> container;
-	BBox wb = scene->WorldBound();
-
-	// Compute scene's BB, and extend it a little more 
-	// (due to floating-point errors in scene intersections - p. 765): like in the IrradianceCache class
-	Vector delta = 0.01f * (wb.pMax - wb.pMin);
-	wb.pMin -= delta;
-	wb.pMax += delta;
-	this->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb);
 
 	// Fetch all the BSSRDF-type objects from the scene
-	//vector< Reference<Shape> > bssrdfObjects;
 	vector< Reference<GeometricPrimitive> > bssrdfObjects;
 	FindBSSRDFObjects(scene, bssrdfObjects);
 
@@ -369,35 +407,39 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 	Reference<Triangle> triangle3;
 	Reference<Triangle> triangle4;
 
-	Reference<Material> bssrdfMaterial;
+	BSSRDFMaterial* bssrdfMaterial = NULL;
 
 	for (int i = 0; primitiveIt != bssrdfObjects.end(); primitiveIt++, i++)
 	{
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
-		primitive->getShape()->GetUniformPointSamples( container );
+		Reference<Shape> mesh = primitive->getShape();
+		mesh->GetUniformPointSamples( container );
 
-		bssrdfMaterial = primitive->getMaterial();
+		bssrdfMaterial = BSSRDFIntegrator::Cast( primitive->getMaterial() );
+
+		// Compute scene's BB, and extend it a little more 
+		// (due to floating-point errors in scene intersections - p. 765): 
+		// like in the IrradianceCache class; and finally build the octree
+		BBox wb = mesh->WorldBound();
+		Vector delta = 0.01f * (wb.pMax - wb.pMin);
+		wb.pMin -= delta;
+		wb.pMax += delta;
+		bssrdfMaterial->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb);
 
 		// TODO: substitute 'dummie' by 'container'
 		vector< pair<Point, Normal> > dummie;
 		vector< pair<Point, Normal> >::iterator pointIt = dummie.begin();
-		Reference<Shape> mesh = primitive->getShape();
+		
 		vector< Reference<Shape> > tris;
 		mesh->Refine( tris );
 
-		if (i != 0)
-		{
-			triangle = static_cast<Triangle*>(tris[0].operator ->());
-			triangle2 = static_cast<Triangle*>(tris[1].operator ->());
-			triangle3 = static_cast<Triangle*>(tris[2].operator ->());
-		} else
-		{
-			triangle4 = static_cast<Triangle*>(tris[0].operator ->());
-		}
+		triangle = static_cast<Triangle*>(tris[0].operator ->());
+		triangle2 = static_cast<Triangle*>(tris[1].operator ->());
+		triangle3 = static_cast<Triangle*>(tris[2].operator ->());
 
-
+		//
+		// TODO: Must use the points that Will is computing
 		// compute irradiance at all points in the container
-		// XXX: Get the new version from the Repo
 		//for (; pointIt != dummie.end(); pointIt++)
 		//{
 		//	ComputeIrradiance(pointIt->first, pointIt->second, 1.00000000000000f, shape, scene);
@@ -406,21 +448,22 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 
 	float dummieRadius = 0.01f;
 	float dummieArea = M_PI * dummieRadius * dummieRadius;
+	Reference<Material> dummieMat = bssrdfMaterial;
 
 	ComputeIrradiance(Point(0.05f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
-		bssrdfMaterial, scene);
+		dummieMat, scene);
 
-	ComputeIrradiance(Point(0.02f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 50, triangle2, 
-		bssrdfMaterial, scene);
+	ComputeIrradiance(Point(0.02f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 5, triangle2, 
+		dummieMat, scene);
 
-	ComputeIrradiance(Point(0.07f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 100, triangle3, 
-		bssrdfMaterial, scene);
+	ComputeIrradiance(Point(0.07f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 10, triangle3, 
+		dummieMat, scene);
 
-	ComputeIrradiance(Point(-0.5f, 1.0f, -1.0f), Normal(0, 0, 1), dummieArea * 10, triangle4, 
-		bssrdfMaterial, scene);
+	//ComputeIrradiance(Point(-0.5f, 1.0f, -1.0f), Normal(0, 0, 1), dummieArea * 10, triangle4, 
+	//	bssrdfMaterial, scene);
 
 	IrradBSSRDFProcess irradProcess;
-	this->bssrdfIrradianceValues->Lookup(Point(-0.4f, 1.0f, -1.0f), irradProcess);
+	bssrdfMaterial->bssrdfIrradianceValues->Lookup(Point(0.069f, 0.05f, 0.0f), irradProcess);
 }
 
 /**
@@ -433,7 +476,7 @@ void BSSRDFIntegrator::FindBSSRDFObjects( const Scene *scene, vector< Reference<
 	
 	// Get all the scene primitives by a "primitive" way :P
 	//
-	// *** NOTE: check the KD-tree Refine method ***
+	// *** NOTE: check the KD-tree Refine method, because it has been implemented on purpose ***
 	scene->aggregate->Refine( primitives );
 
 	vector< Reference< Primitive > >::iterator it = primitives.begin();
@@ -443,20 +486,14 @@ void BSSRDFIntegrator::FindBSSRDFObjects( const Scene *scene, vector< Reference<
 	{
 		Reference< Primitive > primitiveRef = *it;
 
-		// such an ugly line of code :S ...
-		GeometricPrimitive* geoPrimitive = BSSRDFIntegrator::Cast( *it );
+		GeometricPrimitive* geoPrimitive;
+		BSSRDFMaterial* material;
 
 		// if truly a geoPrimitive AND the material 
 		// has BSSRDF characteristics
-		if ( geoPrimitive )
+		if ( BSSRDFIntegrator::TranslucentMaterial(primitiveRef, &geoPrimitive, &material) )
 		{
-			Reference<Material> materialRef = geoPrimitive->getMaterial();
-
-			// Testing to see if the material is of BSSRDF type using an uuuugly cast
-			if ( BSSRDFIntegrator::Cast( materialRef ) != NULL )
-			{
-				container.push_back( geoPrimitive );
-			}
+			container.push_back( geoPrimitive );
 		}
 	}
 }
@@ -472,9 +509,14 @@ void BSSRDFIntegrator::Preprocess(const Scene *scene)
 	
 	if (scene->lights.size() == 0) return;
 
+	//
 	// Precompute the BSSRDF irradiance values for all this kind of objects
+	//
 	ComputeBSSRDFIrradianceValues( scene );
 
+	//
+	// Start the Photon Mapping process
+	//
 	ProgressReporter progress(nCausticPhotons+nDirectPhotons+
 		nIndirectPhotons, "Shooting photons");
 	vector<Photon> causticPhotons;
@@ -541,7 +583,9 @@ void BSSRDFIntegrator::Preprocess(const Scene *scene)
 
 		if (!alpha.Black()) 
 		{
+			//
 			// Follow photon path through scene and record intersections
+			//
 			bool specularPath = false;
 			Intersection photonIsect;
 			int nIntersections = 0;
@@ -554,6 +598,10 @@ void BSSRDFIntegrator::Preprocess(const Scene *scene)
 				BSDF *photonBSDF = photonIsect.GetBSDF(photonRay);
 				BxDFType specularType = BxDFType(BSDF_REFLECTION |
 					BSDF_TRANSMISSION | BSDF_SPECULAR);
+
+				// if the hit surface has more components than the reflective 
+				// ones, i.e., diffuse surface - in the case of a BSSRDF material
+				// it will never store a photon because it doesn't have DIFFUSE components
 				bool hasNonSpecular = (photonBSDF->NumComponents() >
 					photonBSDF->NumComponents(specularType));
 				if (hasNonSpecular) 
@@ -666,6 +714,37 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 	Intersection isect;
 	if (scene->Intersect(ray, &isect)) 
 	{
+
+		/************************************************************************/
+		/* THIS IS WHERE WE START :) TODO: process intersect with BSSRDF        */
+		/************************************************************************/
+		GeometricPrimitive* primitive;
+		BSSRDFMaterial* material;
+
+		// not so good... but :)
+		Reference<Primitive> primitiveRef = const_cast<Primitive*>( isect.primitive );
+
+		// if it is a Translucent Material (BSSRDF)
+		if ( BSSRDFIntegrator::TranslucentMaterial( primitiveRef, &primitive, &material ) )
+		{
+			IrradBSSRDFProcess lookupProcess;
+			material->bssrdfIrradianceValues->Lookup(isect.dg.p, lookupProcess);
+			
+			/************************************************************************/
+			/* XXX: Am I just computing indirect illumination on the Preprocess???? */
+			/************************************************************************/
+
+			//
+			// Return the computed Lo for the object
+			//
+			return lookupProcess.Lo();
+		}
+		
+
+		/************************************************************************/
+		/*                                                                      */
+		/************************************************************************/
+
 		if (alpha) *alpha = 1.;
 		Vector wo = -ray.d;
 
