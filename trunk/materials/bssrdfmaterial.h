@@ -42,28 +42,11 @@ struct IrradBSSRDFSample
 struct IrradBSSRDFProcess
 {
 	// IrradBSSRDFProcess Public Methods
-	IrradBSSRDFProcess(float eps = 0.0001f)
-		: epsilon( eps )
-	{
-	}
+	IrradBSSRDFProcess(BSSRDFMaterial* material, float eps = 0.0001f);
 
-	Spectrum Lo()
-	{
-		Spectrum maravilhaDoMundo;
+	Spectrum Lo(float w);
 
-		return maravilhaDoMundo;
-	}
-
-	void evaluate(const Point &P, const vector<IrradBSSRDFSample> &samples)
-	{
-		//if ( ! subdivide )
-		//{
-		//	// evaluate directly: get the node information about its children
-		//	evaluateNode(P, samples[ 0 ]);
-
-		//	return false;
-		//}
-	}
+	void evaluate(const Point &P, const vector<IrradBSSRDFSample> &samples);
 
 	/**
 	* @param P
@@ -134,9 +117,61 @@ struct IrradBSSRDFProcess
 	}
 
 	/**
-	* @description maximum solid angle allowed to subdivide the voxels
-	*/
+	 * @description maximum solid angle allowed to subdivide the voxels
+	 */
 	float epsilon;
+
+	/**
+	 * @description Reduced Scattering Coefficient
+	 */
+	Spectrum sigmaPrimeS;
+
+	/**
+	 * @description Reduced Scattering Coefficient
+	 */
+	Spectrum sigmaPrimeT;
+
+	/**
+	 * @description Absorption Coefficient
+	 */
+	Spectrum sigmaA;
+
+	/**
+	 * @description Effective Transport extinction coefficient
+	 */
+	Spectrum sigmaTr;
+
+	/**
+	 * @description Mean Free Path
+	 */
+	float lu;
+
+	/**
+	 * @description Relative Index of Refraction
+	 */
+	float eta;
+
+	/**
+	 * @description Distance to the real dipole light source
+	 */
+	float zr;
+
+	/**
+	 * @description Distance to the virtual dipole light source
+	 */
+	float zv;
+
+	/**
+	 * @description Diffuse Fresnel term
+	 */
+	float Fdr;
+
+	/**
+	 * @description ...
+	 */
+	float A;
+	
+	static const float inv4PI;
 
 	// The total radiant exitance on the node
 	Spectrum Mo;
@@ -165,9 +200,6 @@ public:
 
 	ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>* bssrdfIrradianceValues;
 
-	// attributes
-private:
-	
 	/**
 	 * @description Reduced Scattering Coefficient
 	 */
@@ -200,3 +232,62 @@ private:
 	 */
 	Fresnel* fresnel;
 };
+
+void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample> &samples)
+{
+	vector<IrradBSSRDFSample>::const_iterator sampleIt = samples.begin();
+	for (; sampleIt != samples.end(); sampleIt++)
+	{
+		IrradBSSRDFSample smp = *sampleIt;
+		float r = (smp.Pv - P).Length();
+		float rSqrt = r * r;
+		float dr = sqrt(rSqrt + zr * zr);
+		float dv = sqrt(rSqrt + zv * zv);
+		
+		Spectrum term1 = (sigmaTr + 1/dr) * zr;
+		Spectrum term2 = Exp(-sigmaTr * dr) / (dr * dr);
+		Spectrum term3 = (sigmaTr + 1/dv) * zv;
+		Spectrum term4 = Exp(-sigmaTr * dv) / (dv * dv);
+
+		Spectrum Rd = inv4PI * term1 * term2 * term3 * term4;
+
+		/************************************************************************/
+		/* TODO: Fdt can also be precomputed!!!!                                */
+		/************************************************************************/
+		Spectrum Fdt = 1 - Fdr;
+		Mo += Fdt * Rd * smp.Ev * smp.Av;
+	}
+
+}
+
+// static variable
+float inv4PI = 1 / (4 * M_PI);
+
+IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
+: epsilon( eps )
+, material( material )
+{
+	/************************************************************************/
+	/* TODO: Should I pass these computations to the MAterial???            */
+	/************************************************************************/
+	sigmaA		= this->material->sigmaA;
+	sigmaPrimeT = this->material->sigmaPrimeT;
+	sigmaPrimeS = this->material->sigmaPrimeS;
+	sigmaTr		= (sigmaA * sigmaPrimeT * 3).Sqrt();
+	zr			= this->material->lu;
+	eta			= this->material->eta;
+	Fdr			= -(1.440f / eta * eta) + (0.710f / eta) + 0.668f + 0.0636f * eta;
+	A			= (1 + Fdr) / (1 - Fdr);
+	zv			= this->material->lu * (1 + 4/3 * A);
+	
+}
+
+Spectrum IrradBSSRDFProcess::Lo(float w)
+{
+	Spectrum Lo;
+
+	// Fresnel transmittance: 1 - Fresnel reflectance
+	Spectrum Ft = -this->material->fresnel->Evaluate(w) + 1;
+
+	return (Ft / Fdr) * (Mo / M_PI);
+}
