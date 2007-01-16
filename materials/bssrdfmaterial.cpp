@@ -3,10 +3,8 @@
 #include "exoctree.h"
 #include "bssrdfmaterial.h"
 
-BSSRDFMaterial::BSSRDFMaterial(const Spectrum &sigmaPrimeS, const Spectrum &sigmaA, float lu, float eta)
-: sigmaPrimeS( sigmaPrimeS )
+BSSRDFMaterial::BSSRDFMaterial( const Spectrum& sigmaPrimeS, const Spectrum& sigmaA, float eta ) : sigmaPrimeS( sigmaPrimeS )
 , sigmaA( sigmaA )
-, lu( lu )
 , eta( eta )
 {
 	sigmaPrimeT = sigmaPrimeS + sigmaA;
@@ -40,7 +38,6 @@ extern "C" DLLEXPORT BSSRDFMaterial * CreateMaterial(const Transform &xform,
 	Spectrum sigmaPrimeS = mp.FindSpectrum("sigmaPrimeS", Spectrum(1.f));
 	Spectrum sigmaA = mp.FindSpectrum("sigmaA", Spectrum(1.f));
 	float eta = mp.FindFloat("eta", 0.f);
-	float lu = mp.FindFloat("lu", 0.f);
 	
-	return new BSSRDFMaterial(sigmaPrimeS, sigmaA, lu, eta);
+	return new BSSRDFMaterial(sigmaPrimeS, sigmaA, eta);
 }

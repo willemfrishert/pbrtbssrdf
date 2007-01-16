@@ -182,13 +182,16 @@ struct IrradBSSRDFProcess
 	BSSRDFMaterial* material;
 };
 
+// static variable
+const float IrradBSSRDFProcess::inv4PI = 1 / (4 * M_PI);
+
 // BSSRDF Material Class Declarations
 class BSSRDFMaterial : public Material {
 
 	// methods
 public:
 	// BSSRDF Public Methods
-	BSSRDFMaterial(const Spectrum& sigmaPrimeS, const Spectrum& sigmaA, float lu, float eta);
+	BSSRDFMaterial(const Spectrum& sigmaPrimeS, const Spectrum& sigmaA, float eta);
 
 	virtual ~BSSRDFMaterial();
 
@@ -216,11 +219,6 @@ public:
 	Spectrum sigmaA;
 
 	/**
-	 * @description Mean Free Path
-	 */
-	float lu;
-
-	/**
 	 * @description Relative Index of Refraction
 	 */
 	float eta;
@@ -240,16 +238,16 @@ void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample
 	{
 		IrradBSSRDFSample smp = *sampleIt;
 		float r = (smp.Pv - P).Length();
-		float rSqrt = r * r;
-		float dr = sqrt(rSqrt + zr * zr);
-		float dv = sqrt(rSqrt + zv * zv);
+		float rSqr = r * r;
+		float dr = sqrt(rSqr + zr * zr);
+		float dv = sqrt(rSqr + zv * zv);
 		
-		Spectrum term1 = (sigmaTr + 1/dr) * zr;
+		Spectrum C1 = (sigmaTr + 1/dr) * zr;
 		Spectrum term2 = Exp(-sigmaTr * dr) / (dr * dr);
-		Spectrum term3 = (sigmaTr + 1/dv) * zv;
+		Spectrum C2 = (sigmaTr + 1/dv) * zv;
 		Spectrum term4 = Exp(-sigmaTr * dv) / (dv * dv);
 
-		Spectrum Rd = inv4PI * term1 * term2 * term3 * term4;
+		Spectrum Rd = inv4PI * C1 * term2 * C2 * term4;
 
 		/************************************************************************/
 		/* TODO: Fdt can also be precomputed!!!!                                */
@@ -259,9 +257,6 @@ void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample
 	}
 
 }
-
-// static variable
-float inv4PI = 1 / (4 * M_PI);
 
 IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
 : epsilon( eps )
@@ -274,11 +269,20 @@ IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
 	sigmaPrimeT = this->material->sigmaPrimeT;
 	sigmaPrimeS = this->material->sigmaPrimeS;
 	sigmaTr		= (sigmaA * sigmaPrimeT * 3).Sqrt();
-	zr			= this->material->lu;
+	
+	// it's used the Luminance value of the Spectrum to compute the Mean Free Path
+	//float sigmaTrLuminance = sigmaTr.y();
+	//assert( sigmaTrLuminance );
+	float sigmaPrimeTLuminance = sigmaPrimeT.y();
+	assert( sigmaPrimeTLuminance );
+	
+	//lu			= (1 / sigmaTrLuminance);
+	lu			= (1 / sigmaPrimeTLuminance);
+	zr			= this->lu;
 	eta			= this->material->eta;
-	Fdr			= -(1.440f / eta * eta) + (0.710f / eta) + 0.668f + 0.0636f * eta;
+	Fdr			= -(1.440f / (eta * eta)) + (0.710f / eta) + 0.668f + 0.0636f * eta;
 	A			= (1 + Fdr) / (1 - Fdr);
-	zv			= this->material->lu * (1 + 4/3 * A);
+	zv			= this->lu * (1 + 4/3 * A);
 	
 }
 
