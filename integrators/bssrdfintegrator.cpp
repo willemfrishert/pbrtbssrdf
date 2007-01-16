@@ -21,7 +21,7 @@
 #include "bssrdfmaterial.h"
 #include "bssrdfintegrator.h"
 
-using std::pair;
+using namespace std;
 
 struct Photon 
 {
@@ -120,10 +120,38 @@ void BSSRDFIntegrator::RequestSamples(Sample *sample,
 		gatherSampleOffset = sample->Add2D(gatherSamples);
 		gatherComponentOffset = sample->Add1D(gatherSamples);
 	}
+
+	// store a pointer to the Sample object
+	this->mSample = sample;
 }
 /************************************************************************/
 /* NEW FUNCTIONS														*/
 /************************************************************************/
+/**
+ * @description since the samples are only generated within the call of Li() 
+ * we use Stratified Sampling to generate samples to compute the 
+ * Irradiance values for the Diffusion Approximation
+ */
+void BSSRDFIntegrator::GenerateStratifiedSamples()
+{
+	// Generate stratified samples for integrators
+	for (u_int i = 0; i < this->mSample->n1D.size(); ++i)
+	{
+		for (u_int j = 0; j < this->mSample->n1D[i]; ++j)
+		{
+			this->mSample->oneD[i][j] = RandomFloat();
+		}
+	}
+	
+	for (u_int i = 0; i < this->mSample->n2D.size(); ++i)
+	{
+		for (u_int j = 0; j < 2*this->mSample->n2D[i]; ++j)
+		{
+			this->mSample->twoD[i][j] = RandomFloat();
+		}
+	}
+}
+
 /**
  * @param primitive
  * @return true if the material contained on this primitive is a translucent, i.e.,
@@ -221,12 +249,10 @@ Spectrum BSSRDFIntegrator::ComputeRadianceEstimateAlongRay( RayDifferential& r, 
 		const Normal &n = bsdf->dgShading.nn;
 		Vector wo = -ray.d;
 
-		// ### ?????? ( dire ) NEED TO CHECK THIS OUT WELL :) ?????? ###
-		// NOTE: NULL is passed because the sample is not used when the 
-		// last arguments (not passed here, using the default ones) are -1, random values 
-		// are generated and the Sample is discarded
+		// mSample is in fact a pointer to the sample
+		// NOTE: the sample is only passed to the Integrator on the Li method
 		L += pathThroughput *
-			UniformSampleOneLight(scene, p, n, wo, bsdf, NULL);
+			UniformSampleOneLight(scene, p, n, wo, bsdf, this->mSample);
 
 		// *********************** ################## ********** TMP ######
 		int maxIndirectDepth = 5;
@@ -277,8 +303,7 @@ Spectrum BSSRDFIntegrator::ComputeRadianceEstimateAlongRay( RayDifferential& r, 
  * @param material
  * @return 
  */
-BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n, Reference<Triangle>& shape, 
-										   Reference<Material>& material ) const
+BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n, Reference<Shape>& shape, Reference<Material>& material ) const
 {
 	DifferentialGeometry dg;
 	shape->GetDifferentialGeometry(p, &dg);
@@ -297,9 +322,7 @@ BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n, Ref
  * @param material
  * @param scene
  */
-void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float pArea, 
-										 Reference<Triangle>& triangle, Reference<Material>& material, 
-										 const Scene *scene )
+void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float pArea, Reference<Shape>& triangle, Reference<Material>& material, const Scene *scene )
 {
 	Spectrum E;
 
@@ -342,8 +365,15 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 		// ### flip ray if going on the wrong direction
 		if (Dot(r.d, n) < 0) r.d = -r.d;
 
+		// generate new sample values for the Direct and Indirect illumination computation
+		GenerateStratifiedSamples();
+
 		// ### Do path tracing to compute radiance along ray for estimate
 		E += ComputeRadianceEstimateAlongRay(r, scene);
+
+		E += UniformSampleAllLights(scene, p, n, w, bsdf, this->mSample, 
+			this->lightSampleOffset, this->bsdfSampleOffset,
+			this->bsdfComponentOffset);
 
 		float dist = r.maxt * r.d.Length();
 		sumInvDists += 1.f / dist;
@@ -352,9 +382,6 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 	// ### Finally, estimate the irradiance based on cosine-weighted distribution 
 	// ### of directions: see Monte Carlo basic Estimator
 	E *= M_PI / float(nSamples);
-
-	//// Now, compute the Direct Illumination component
-	
 
 	// Add computed irradiance value to cache
 	// Update statistics for new irradiance sample
@@ -369,11 +396,10 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 	/************************************************************************/
 	/* TODO: CHECK THIS PART TO CLEAN/OPTIMIZE: PROC/SAMPLE                 */
 	/************************************************************************/
-
-	IrradBSSRDFSample irradSample(E, p, pArea);
-	IrradBSSRDFProcess irradProcess;
 	
 	BSSRDFMaterial* bssrdfMaterial = BSSRDFIntegrator::Cast( material );
+	IrradBSSRDFSample irradSample(E, p, pArea);
+	IrradBSSRDFProcess irradProcess( bssrdfMaterial );
 	//this->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
 
 	// just to make sure :)
@@ -389,7 +415,7 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
  */
 void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 {
-	vector<Point> container;
+	vector<UniformPoint> container;
 
 	// Fetch all the BSSRDF-type objects from the scene
 	vector< Reference<GeometricPrimitive> > bssrdfObjects;
@@ -400,20 +426,25 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 	/************************************************************************/
 	vector< Reference<GeometricPrimitive> >::iterator primitiveIt = bssrdfObjects.begin();
 
-	DebugBreak();
+	//DebugBreak();
 
-	Reference<Triangle> triangle;
-	Reference<Triangle> triangle2;
-	Reference<Triangle> triangle3;
-	Reference<Triangle> triangle4;
+	Reference<Shape> triangle;
+	Reference<Shape> triangle2;
+	Reference<Shape> triangle3;
+	Reference<Shape> triangle4;
 
 	BSSRDFMaterial* bssrdfMaterial = NULL;
+
+	float dummieRadius = 0.01f;
+	float dummieArea = M_PI * dummieRadius * dummieRadius;
+
+	vector< Reference<Shape> > tris;
 
 	for (int i = 0; primitiveIt != bssrdfObjects.end(); primitiveIt++, i++)
 	{
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
 		Reference<Shape> mesh = primitive->getShape();
-		mesh->GetUniformPointSamples( container );
+		mesh->GetUniformPointSamples(container, dummieArea);
 
 		bssrdfMaterial = BSSRDFIntegrator::Cast( primitive->getMaterial() );
 
@@ -430,12 +461,11 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		vector< pair<Point, Normal> > dummie;
 		vector< pair<Point, Normal> >::iterator pointIt = dummie.begin();
 		
-		vector< Reference<Shape> > tris;
 		mesh->Refine( tris );
 
-		triangle = static_cast<Triangle*>(tris[0].operator ->());
-		triangle2 = static_cast<Triangle*>(tris[1].operator ->());
-		triangle3 = static_cast<Triangle*>(tris[2].operator ->());
+		triangle = tris[0];
+		triangle2 = tris[1];
+		triangle3 = tris[2];
 
 		//
 		// TODO: Must use the points that Will is computing
@@ -446,23 +476,90 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		//}
 	}
 
-	float dummieRadius = 0.01f;
-	float dummieArea = M_PI * dummieRadius * dummieRadius;
+	vector<pair<Point, Normal>> pn;
 	Reference<Material> dummieMat = bssrdfMaterial;
+	
+	// Front
+	Point pA(0.1f, 0.05f, 0.0f);
+	Point pB(0.05f, 0.1f, 0.0f);
+	// Right
+	Point pC(0.15f, 0.05f, -0.1f);
+	Point pD(0.15f, 0.1f, -0.05f);
+	// Back
+	Point pE(0.1f, 0.05f, -0.15f);
+	Point pF(0.05f, 0.1f, -0.15f);
+	// Left
+	Point pG(0.0f, 0.05f, -0.1f);
+	Point pH(0.0f, 0.1f, -0.05f);
+	// Top
+	Point pI(0.1f, 0.15f, -0.05f);
+	Point pJ(0.05f, 0.15f, -0.1f);
+	// Bottom
+	Point pK(0.1f, 0.0f, -0.05f);
+	Point pL(0.05f, 0.0f, -0.1f);
 
-	ComputeIrradiance(Point(0.05f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
-		dummieMat, scene);
+	// Front
+	Normal nA(0,0,1);
+	Normal nB(0,0,1);
+	// Right
+	Normal nC(1,0,0);
+	Normal nD(1,0,0);
+	// Back
+	Normal nE(0,0,-1);
+	Normal nF(0,0,-1);
+	// Left
+	Normal nG(-1,0,0);
+	Normal nH(-1,0,0);
+	// Top
+	Normal nI(0,1,0);
+	Normal nJ(0,1,0);
+	// Bottom
+	Normal nK(0,-1,0);
+	Normal nL(0,-1,0);
 
-	ComputeIrradiance(Point(0.02f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 5, triangle2, 
-		dummieMat, scene);
+	// Front
+	pn.push_back(make_pair(pA, nA));
+	pn.push_back(make_pair(pB, nB));
+	// Back
+	pn.push_back(make_pair(pE, nE));
+	pn.push_back(make_pair(pF, nF));
+	// Bottom
+	pn.push_back(make_pair(pK, nK));
+	pn.push_back(make_pair(pL, nL));
+	// Top
+	pn.push_back(make_pair(pI, nI));
+	pn.push_back(make_pair(pJ, nJ));
+	// Left
+	pn.push_back(make_pair(pG, nG));
+	pn.push_back(make_pair(pH, nH));
+	// Right
+	pn.push_back(make_pair(pC, nC));
+	pn.push_back(make_pair(pD, nD));
 
-	ComputeIrradiance(Point(0.07f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea * 10, triangle3, 
-		dummieMat, scene);
+	vector<pair<Point, Normal>>::iterator pnIt = pn.begin();
+	vector<Reference<Shape>>::iterator trisIt = tris.begin();
+
+	for (; pnIt != pn.end(); pnIt++, trisIt++)
+	{
+		ComputeIrradiance(pnIt->first, pnIt->second, dummieArea, *trisIt, 
+			dummieMat, scene);
+	}
+	
+	
+
+	//ComputeIrradiance(Point(0.05f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
+	//	dummieMat, scene);
+
+	//ComputeIrradiance(Point(0.02f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle2, 
+	//	dummieMat, scene);
+
+	//ComputeIrradiance(Point(0.07f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle3, 
+	//	dummieMat, scene);
 
 	//ComputeIrradiance(Point(-0.5f, 1.0f, -1.0f), Normal(0, 0, 1), dummieArea * 10, triangle4, 
 	//	bssrdfMaterial, scene);
 
-	IrradBSSRDFProcess irradProcess;
+	IrradBSSRDFProcess irradProcess( bssrdfMaterial );
 	bssrdfMaterial->bssrdfIrradianceValues->Lookup(Point(0.069f, 0.05f, 0.0f), irradProcess);
 }
 
@@ -533,7 +630,7 @@ void BSSRDFIntegrator::Preprocess(const Scene *scene)
 	bool directDone = (nDirectPhotons == 0);
 	bool indirectDone = (nIndirectPhotons == 0);
 
-	DebugBreak();
+	//DebugBreak();
 
 	// ### Main while loop: shooting photons for caustics and photonmap ###
 	while (!causticDone || !directDone || !indirectDone)
@@ -727,17 +824,20 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 		// if it is a Translucent Material (BSSRDF)
 		if ( BSSRDFIntegrator::TranslucentMaterial( primitiveRef, &primitive, &material ) )
 		{
-			IrradBSSRDFProcess lookupProcess;
+			IrradBSSRDFProcess lookupProcess( material );
 			material->bssrdfIrradianceValues->Lookup(isect.dg.p, lookupProcess);
 			
-			/************************************************************************/
-			/* XXX: Am I just computing indirect illumination on the Preprocess???? */
-			/************************************************************************/
+			//
+			// Return the computed Lo for the object: the cosi variable is cosine 
+			// of the angle between the normal and incident ray
+			//
+			Vector wo = -ray.d;
+			float cosi = Dot(wo, isect.dg.nn);
+			Spectrum Lo = lookupProcess.Lo(cosi );
 
-			//
-			// Return the computed Lo for the object
-			//
-			return lookupProcess.Lo();
+			printf("%f %f %f\t", Lo.)
+
+			return Lo;
 		}
 		
 

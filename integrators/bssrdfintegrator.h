@@ -39,11 +39,11 @@ private:
 	
 	void FindBSSRDFObjects(const Scene *scene, vector< Reference<GeometricPrimitive> >& container);
 	
-	void ComputeIrradiance(const Point &p, const Normal &n, float pArea, Reference<Triangle>& triangle, Reference<Material>& material, const Scene *scene);
+	void ComputeIrradiance(const Point &p, const Normal &n, float pArea, Reference<Shape>& triangle, Reference<Material>& material, const Scene *scene);
 	
 	Spectrum ComputeRadianceEstimateAlongRay(RayDifferential& r, const Scene *scene) const;
 	
-	BSDF* ComputeInitialBSDF(const Point& p, const Normal& n, Reference<Triangle>& shape, Reference<Material>& material) const;
+	BSDF* ComputeInitialBSDF(const Point& p, const Normal& n, Reference<Shape>& shape, Reference<Material>& material) const;
 
 	inline static GeometricPrimitive* Cast(Reference<Primitive>& primitive);
 
@@ -52,6 +52,8 @@ private:
 	//inline static const BSSRDFMaterial* Cast(const Reference<Material>& material);
 
 	inline static bool TranslucentMaterial(Reference<Primitive>& primitive, GeometricPrimitive** geoPrim, BSSRDFMaterial** material);
+
+	void GenerateStratifiedSamples();
 
 	// BSSRDFIntegrator Private Data
 	u_int nCausticPhotons, nIndirectPhotons, nDirectPhotons;
@@ -70,6 +72,10 @@ private:
 	mutable KdTree<Photon, PhotonProcess> *causticMap;
 	mutable KdTree<Photon, PhotonProcess> *directMap;
 	mutable KdTree<Photon, PhotonProcess> *indirectMap;
+
+	// Just going to store a pointer to the sample 
+	// so I can use it on the Preprocess
+	Sample* mSample;
 
 	///************************************************************************/
 	///* OUR NEW STUFF                                                        */
