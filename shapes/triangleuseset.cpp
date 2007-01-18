@@ -23,7 +23,7 @@ TriangleUseSet::TriangleUseSet(Reference<Shape>& aTriangle, Point* aP1, Point* a
 
 	Vector crossProduct = Cross( *aP2-*aP1, *aP3-*aP1 );
 	iNormal = Normal( Normalize(crossProduct) );
-	iTriangleArea = crossProduct.Length();
+	iTriangleArea = crossProduct.Length() * 0.5f;
 
 	iTriangle = aTriangle;
 }
