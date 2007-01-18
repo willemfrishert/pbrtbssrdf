@@ -23,6 +23,12 @@ struct IrradBSSRDFSample
 		: Ev(e), Pv(P), Av(a)
 	{ }
 
+	void Print(FILE* f)
+	{
+		fprintf(f, "Ev("); Ev.Print( f ); fprintf(f, ")"); 
+		fprintf(f, " Pv(%.4f, %.4f, %.4f)", Pv.x, Pv.y, Pv.z);
+	}
+
 
 	// The total irradiance on the node
 	Spectrum Ev;
@@ -101,7 +107,7 @@ struct IrradBSSRDFProcess
 		// recursive average computation:
 		// Add the average position weighted by the 'weighted irradiance'
 		// It's assumed that the Spectrum's irradiance intensity is the Luminance value
-		Point weightedPv = dataItem.Pv * dataItem.Ev.y();
+		Point weightedPv = dataItem.Pv/* * dataItem.Ev.y()*/;
 
 		sample.Pv = ((t - 1) * invT) * sample.Pv + ( invT * weightedPv);
 
@@ -229,6 +235,11 @@ public:
 	 * so, to get the transmittance, it should be done: Ft = 1 - Fr
 	 */
 	Fresnel* fresnel;
+
+	/**
+	 * @description Mean Free Path
+	 */
+	float lu;
 };
 
 void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample> &samples)
@@ -253,7 +264,17 @@ void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample
 		/* TODO: Fdt can also be precomputed!!!!                                */
 		/************************************************************************/
 		Spectrum Fdt = 1 - Fdr;
+		//printf("Mo: Fdt("); Fdt.Print(stdout); printf(") "); 
+		//printf("E("); smp.Ev.Print(stdout); printf(") ");
+		//printf("Rd("); Rd.Print(stdout); printf(")-- ");
+		//printf("C1("); C1.Print(stdout); printf(") -- ");
+		//printf("term2("); term2.Print(stdout); printf(") -- ");
+		//printf("C2("); C2.Print(stdout); printf(") -- ");
+		//printf("term4("); term4.Print(stdout); printf(") -- ");
+		//printf("MULT("); (C1 * term2 * C2 * term4).Print(stdout); printf(") -- ");
+		
 		Mo += Fdt * Rd * smp.Ev * smp.Av;
+		//printf("Mo("); Mo.Print(stdout); printf(")\n\n");
 	}
 
 }
@@ -270,14 +291,7 @@ IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
 	sigmaPrimeS = this->material->sigmaPrimeS;
 	sigmaTr		= (sigmaA * sigmaPrimeT * 3).Sqrt();
 	
-	// it's used the Luminance value of the Spectrum to compute the Mean Free Path
-	//float sigmaTrLuminance = sigmaTr.y();
-	//assert( sigmaTrLuminance );
-	float sigmaPrimeTLuminance = sigmaPrimeT.y();
-	assert( sigmaPrimeTLuminance );
-	
-	//lu			= (1 / sigmaTrLuminance);
-	lu			= (1 / sigmaPrimeTLuminance);
+	lu			= this->material->lu;
 	zr			= this->lu;
 	eta			= this->material->eta;
 	Fdr			= -(1.440f / (eta * eta)) + (0.710f / eta) + 0.668f + 0.0636f * eta;
@@ -288,10 +302,18 @@ IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
 
 Spectrum IrradBSSRDFProcess::Lo(float w)
 {
-	Spectrum Lo;
-
+	//FILE* f;
+	//fopen_s(&f , "lo.out", "a");
+	
 	// Fresnel transmittance: 1 - Fresnel reflectance
 	Spectrum Ft = -this->material->fresnel->Evaluate(w) + 1;
 
-	return (Ft / Fdr) * (Mo / M_PI);
+	Spectrum Lo = (Ft / Fdr) * (Mo / M_PI);
+
+	//fprintf(f, "Mo("); Mo.Print(f); fprintf(f, ")  ");
+	//fprintf(f, "Lo("); Lo.Print(f); fprintf(f, ")\n");
+
+	//fclose( f );
+
+	return Lo;
 }

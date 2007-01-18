@@ -8,9 +8,22 @@ BSSRDFMaterial::BSSRDFMaterial( const Spectrum& sigmaPrimeS, const Spectrum& sig
 , eta( eta )
 {
 	sigmaPrimeT = sigmaPrimeS + sigmaA;
+	//// the first, etai is the air's index of refraction, and the 
+	//// second one, the material's index of refraction
+	//fresnel = new FresnelDielectric(1.0, eta);
+
 	// the first, etai is the air's index of refraction, and the 
 	// second one, the material's index of refraction
-	fresnel = new FresnelDielectric(1.0, eta);
+	// NOTE: file translucent.cpp line 60
+	fresnel = new FresnelDielectric(eta, 1.0f);
+
+	// it's used the Luminance value of the Spectrum to compute the Mean Free Path
+	//float sigmaTrLuminance = sigmaTr.y();
+	//assert( sigmaTrLuminance );
+	float sigmaPrimeTLuminance = sigmaPrimeT.y();
+	assert( sigmaPrimeTLuminance );
+
+	lu	= (1 / sigmaPrimeTLuminance);
 }
 
 BSSRDFMaterial::~BSSRDFMaterial()
@@ -24,10 +37,16 @@ BSDF* BSSRDFMaterial::GetBSDF(const DifferentialGeometry &dgGeom, const Differen
 	
 	dgs = dgShading;
 	BSDF *bsdf = BSDF_ALLOC(BSDF)(dgs, dgGeom.nn);
+
+	float c[3] = {0.8f, 0, 0};
+	Spectrum reflectance( c );
+	MicrofacetDistribution* distribution = new Blinn(1.0f);
 	
 	// only add a SpecularReflection BSDF, the transmission is already 
 	// contemplated on our implementation, right? :P
-	bsdf->Add(BSDF_ALLOC(SpecularReflection)(Spectrum(0.5f), fresnel));
+	//bsdf->Add(BSDF_ALLOC(SpecularReflection)(Spectrum(0.5f), fresnel));
+	//bsdf->Add(BSDF_ALLOC(Microfacet(reflectance, fresnel, distribution)));
+	bsdf->Add(BSDF_ALLOC(Lambertian)(reflectance));
 
 	return bsdf;
 }
