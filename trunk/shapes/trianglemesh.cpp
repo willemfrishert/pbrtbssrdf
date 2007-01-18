@@ -1,19 +1,16 @@
-
 // trianglemesh.cpp*
-#include "shape.h"
-#include "paramset.h"
-
-#include "core/sampling.h"
 #include "trianglemesh.h"
-
 #include "pointrepulsion.h"
 
 // TriangleMesh Method Definitions
 // ###################### TriangleMesh Method Definitions #############################
-TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
-		int nt, int nv, const int *vi, const Point *P,
-		const Normal *N, const Vector *S, const float *uv)
-	: Shape(o2w, ro) 
+TriangleMesh::TriangleMesh( const Transform &o2w, bool ro, int nt, int nv,
+						   const int *vi, const Point *P, const Normal *N,
+						   const Vector *S, const float *uv, 
+						   const int aNumberOfIterations, const float aForceScalar ) 
+: Shape(o2w, ro) 
+, iNumberOfIterations(aNumberOfIterations)
+, iForceScale(aForceScalar)
 {
 	ntris = nt;
 	nverts = nv;
@@ -41,11 +38,15 @@ TriangleMesh::TriangleMesh(const Transform &o2w, bool ro,
 	for (int i  = 0; i < nverts; ++i)
 		p[i] = ObjectToWorld(P[i]);
 
-	// Undo transformation to world space. Give me a copy of local space to debug :)
-	for (int i  = 0; i < nverts; ++i)
-		p[i] = P[i];
-	vector<std::pair<Point, Normal > > container;
-	this->GetUniformPointSamples(container);
+	//printf("Undo transformation to world space. Give me a copy of local space to debug :)\n");
+	//printf("Don't forget to remove this code");
+	//for (int i  = 0; i < nverts; ++i)
+	//	p[i] = P[i];
+
+	//vector<UniformPoint > container;
+	//float i = 0;
+
+	//this->GetUniformPointSamples(container, i, 2);
 }
 
 TriangleMesh::~TriangleMesh()
@@ -90,45 +91,32 @@ void TriangleMesh::Refine(vector<Reference<Shape> > &refined) const
 	}
 }
 
-void TriangleMesh::GetUniformPointSamples(vector<std::pair<Point, Normal > >& container) const
+void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
 {
 	// TODO: fill me :P
+	// Working on it ;)
 
-	// Determine how many point samples are needed (depending on mean-free path??)
+	vector<Reference<Shape> > triangleList;	// container for the triangles
+	Refine( triangleList );
 
-	// Spread points on surfaces:
-	// create vector of triangles (using void TriangleMesh::Refine(vector<Reference<Shape> > &refined) const)
+	PointRepulsion pr( ntris, nverts, vertexIndex, p, triangleList);
 
-	// set up stratified jittered sample pattern with points between [0,0] and [1,1];
+//	DebugBreak();
+	//// create sample points based on the mean free path and the area of the object.
+	//// the area is already computed inside
+	int numberOfSamplePoints = pr.SetupSamplePoints( meanFreePath );
 
-	// set up list of partial sums of polygon areas in the model (total already is seen as a quad of [0,0] to [1,1])
-	// drop points using square_to_polygon method (keeping track in which triangle the points falls)
+	// relaxation of the random points 
+	for(int k = 0; k<iNumberOfIterations; k++)
+	{
+		pr.ComputeRepulsiveForces( iForceScale );
+		pr.ComputeNewPositions();
+	}
 
-	// Point repulsion technique
+	// collect the information
+	pr.FillUniformSamplePointStructure( container );
 
-	int numberOfSamplePoints = 200;
-
-	//vector<Reference<Shape> > triangleList;
-	//this->Refine( triangleList );
-
-	//int xSamples = static_cast<int>( ceil( sqrt( static_cast<float>(numberOfSamplePoints) ) ) );
-	//int ySamples = xSamples;
-
-	//float* samples = new float[xSamples*ySamples];
-
-	//StratifiedSample2D(samples, xSamples, ySamples, true);
-
-	//for (int i=0; i<xSamples*ySamples; i++)
-	//{
-	//	std::cout << i << " : "<< samples[i] << std::endl;
-	//}
-	//	
-
-
-	//delete[] samples;
-
-	PointRepulsion PointRepulsion(ntris, nverts, vertexIndex, p, numberOfSamplePoints);
-
+	pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
 }
 
 // ###################### Triangle Method Definitions #############################
@@ -448,5 +436,22 @@ extern "C" DLLEXPORT Shape *CreateShape(const Transform &o2w, bool reverseOrient
 		}
 	}
 
-	return new TriangleMesh(o2w, reverseOrientation, nvi/3, npi, vi, P,	N, S, uvs);
+	int numberOfIterations = 40;
+	int amount = 0;
+	const int *pIterations = params.FindInt("pointrepulsioniterate", &amount);
+	if (pIterations)
+	{
+		numberOfIterations = pIterations[0];
+	}
+
+	float forceScale = 1.0f;
+	int nForceScale = 0;
+	const float *pForceScale = params.FindFloat("forcescale", &amount);
+	if (pForceScale)
+	{
+		forceScale = pForceScale[0];
+	}
+
+	return new TriangleMesh(o2w, reverseOrientation, nvi/3, npi, vi, P,	N,
+							S, uvs, numberOfIterations, forceScale);
 }
