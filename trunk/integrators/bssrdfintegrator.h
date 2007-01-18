@@ -53,6 +53,8 @@ private:
 
 	inline static bool TranslucentMaterial(Reference<Primitive>& primitive, GeometricPrimitive** geoPrim, BSSRDFMaterial** material);
 
+	inline static bool TranslucentMaterial(Reference<Primitive>& primitive);
+
 	void GenerateStratifiedSamples();
 
 	// BSSRDFIntegrator Private Data
