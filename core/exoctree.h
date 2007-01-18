@@ -56,6 +56,10 @@ public:
 		lookupPrivate(&root, bound, p, process);
 	}
 
+	void Print(ExOctNode<ExNodeData> *node, FILE *f, int child = 0, int level = 0);
+
+	void Print(FILE *f);
+
 	// ExOctree Private Methods
 private:
 	void addPrivate(ExOctNode<ExNodeData> *node, const BBox &nodeBound,
@@ -240,7 +244,67 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 			{
 				lookupPrivate(node->children[ i ], p, process);
 			}
+			else
+			{
+				process.evaluate(p, node->children[ i ]->data);
+			}
 		}
 	}
 }
+
+template <class ExNodeData, class LookupProc>
+void ExOctree<ExNodeData, LookupProc>::Print(ExOctNode<ExNodeData> *node, FILE *f, int child, int level)
+{
+	
+	if ( node )
+	{
+		fprintf(f, "N%d\n", child);
+		vector<ExNodeData>::iterator dataIt = node->data.begin();
+		for (; dataIt != node->data.end() ;dataIt++)
+		{
+			// indent data
+			for (int i = 0; i < level; i++)
+			{
+				fprintf(f, "   ");
+			}
+
+			fprintf(f, "###");
+			dataIt->Print( f );
+			fprintf(f, "\n");
+		}
+
+		// kill recursion
+		if (node->childLeaves == 0)
+		{
+			return;
+		}
+		
+		level++;
+
+		// start printing the children
+		//fprintf(f, "\n");
+
+		// iterate children
+		for (int i = 0; i < 8; ++i)
+		{
+			if ( node->children[ i ] )
+			{
+				// indent child
+				for (int i = 0; i < level; i++)
+				{
+					fprintf(f, "---");
+				}
+
+				Print(node->children[ i ], f, i, level);
+			}
+		}
+	}
+}
+
+template <class ExNodeData, class LookupProc>
+void ExOctree<ExNodeData, LookupProc>::Print(FILE *f)
+{
+	Print(&this->root, f);
+}
+
 #endif // PBRT_EXOCTREE_H
