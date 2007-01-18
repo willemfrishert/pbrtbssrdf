@@ -179,12 +179,14 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 {
 	for (int i = 0; i < 8; i++)
 	{
-		if( node->children[ i ] != NULL )
+		ExOctNode<ExNodeData>* child = node->children[ i ];
+		if( child != NULL )
 		{
 			// if SO, continue recursion
-			if( process.subdivide(p, node->children[ i ]->data) )
+			if( (child->childLeaves != 0) && 
+				process.subdivide(p, child->data) )
 			{
-				lookupPrivate(node->children[ i ], p, process);
+				lookupPrivate(child, p, process);
 			}
 			else // just evaluate it
 			{
