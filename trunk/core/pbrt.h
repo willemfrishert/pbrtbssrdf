@@ -516,9 +516,13 @@ struct COREDLL Matrix4x4 : public ReferenceCounted {
 				          m1->m[i][3] * m2->m[3][j];
 		return new Matrix4x4(r);
 	}
+
 	Reference<Matrix4x4> Inverse() const;
 	float m[4][4];
 };
+
+extern COREDLL void Rotate(float angle, const Vector &axis, Reference<Matrix4x4>& aM, Reference<Matrix4x4>& aMinv);
+
 // Global Inline Functions
 #ifdef NDEBUG
 #define Assert(expr) ((void)0)
