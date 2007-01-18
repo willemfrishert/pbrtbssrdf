@@ -2,41 +2,43 @@
 #include "core/sampling.h"
 #include "transform.h"
 
+#include "TriangleMesh.h"
 
-PointRepulsion::PointRepulsion(int aNumberOfTriangles, int aNumberOfVertices, int* aVertexIndex,
-							   Point* aVertices, int aNumberOfSamplePoints )
+
+PointRepulsion::PointRepulsion( int aNumberOfTriangles, int aNumberOfVertices, int* aVertexIndex, 
+							   Point* aVertices, vector<Reference<Shape> >& aTriangleList  ) 
 : iNumberOfTriangles( aNumberOfTriangles )
 , iNumberOfVertices( aNumberOfVertices )
 , iVertexIndex( aVertexIndex )
 , iVertices( aVertices)
-, iNumberOfSamplePoints( aNumberOfSamplePoints )
 , iTotalAreaOfSurface( 0.0f )
 {	
 	// setup the triangle structure (find edge neighbors)
-	SetupTriangles();
+	SetupTriangleUseSets( aTriangleList );
 
 	// compute the total area of the object
 	vector<TriangleUseSet>::iterator triangleIter = this->iTriangles.begin();
 
 	while ( triangleIter != this->iTriangles.end() ) 
 	{
-		iTotalAreaOfSurface += (*triangleIter).ComputeArea();
+		iTotalAreaOfSurface += (*triangleIter).GetArea();
+		printf("accumilated area = %f\n", iTotalAreaOfSurface);
 		triangleIter++;
 	}
 
 	// add stratified sample points to the triangle mesh using a
 	// list of partial sums of the polygon areas
-	SetupSamplePoints();
+	//SetupSamplePoints();
 
-	// compute the repulsive range r
-	iRepulsiveRadius = 2*sqrt( (iTotalAreaOfSurface/iNumberOfSamplePoints) );
+	////// compute the repulsive range r
+	//iRepulsiveRadius = 2*sqrt( (iTotalAreaOfSurface/iNumberOfSamplePoints) );
 
-	// relaxation of the random points 
-	for(int k = 0; k<40; k++)
-	{
-		ComputeRepulsiveForces();
-		ComputeNewPositions();
-	}
+	//// relaxation of the random points 
+	//for(int k = 0; k<aNumberOfIterations; k++)
+	//{
+	//	ComputeRepulsiveForces();
+	//	ComputeNewPositions();
+	//}
 }
 
 PointRepulsion::~PointRepulsion()
@@ -47,6 +49,7 @@ PointRepulsion::~PointRepulsion()
 		iSamplePoints.at(i) = NULL;
 	}
 	iSamplePoints.clear();
+
 	for ( int i=0, maxSamplePointContainers = iSamplePointContainer.size(); i<maxSamplePointContainers; i++)
 	{
 		delete iSamplePointContainer.at(i);
@@ -57,17 +60,24 @@ PointRepulsion::~PointRepulsion()
 	iTriangles.clear();
 };
 
-void PointRepulsion::SetupTriangles()
+/*!
+ * \brief
+ * Sets up the triangle usesets. Store the neighboring triangles and the rotation 
+ * matrices needed to make the triangles coplanar
+ * 
+ */
+void PointRepulsion::SetupTriangleUseSets(vector<Reference<Shape> >& aTriangleList)
 {
-	int* vertices1;
+	int* vertices1 = NULL;
 
 	//set up all the triangle use sets
 	for (int i=0; i<iNumberOfTriangles;i++)
 	{
-		vertices1 = &iVertexIndex[3*i];
+		Triangle* triangle = PointRepulsion::Cast(aTriangleList.at(i));
+		triangle->GetVertexIndices( &vertices1 );
 
-		TriangleUseSet triangle( (iVertices+vertices1[0]), (iVertices+vertices1[1]), (iVertices+vertices1[2]) );
-		this->iTriangles.push_back( triangle );
+		TriangleUseSet triangleUseSet( aTriangleList.at(i), (iVertices+vertices1[0]), (iVertices+vertices1[1]), (iVertices+vertices1[2]) );
+		this->iTriangles.push_back( triangleUseSet );
 	}
 
 	// loop through all the indices to find triangle neighbors
@@ -158,6 +168,7 @@ void PointRepulsion::SetupTriangles()
 				}
 			}
 
+
 			// if neighbor is found, calculate rotation rotation angle, matrices and register neighbors
 			if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
 			{
@@ -191,10 +202,16 @@ void PointRepulsion::CalculateTransformationMatrices( TriangleUseSet &aTriangle,
 {
 	// Calculate the angle of rotation.
 	// This is the angle between the surface of this triangle and the neighbor.
-	Normal normal = aTriangle.ComputeNormal();
-	Normal neighborNormal = aNeighborTriangle.ComputeNormal();
+	Normal normal = aTriangle.GetNormal();
+	Normal neighborNormal = aNeighborTriangle.GetNormal();
 
-	aRotationAngle = Degrees( acos( Dot( normal, neighborNormal) ) );
+	float dotProduct = Dot( normal, neighborNormal);
+
+	// clamping the dot product
+	if (dotProduct>1.0f) dotProduct = 1.0f;
+	if (dotProduct<-1.0f) dotProduct = -1.0f;
+
+	aRotationAngle = Degrees( acos( dotProduct ) );
 	if (aRotationAngle < 0.03f)
 	{
 		return;
@@ -211,17 +228,28 @@ void PointRepulsion::CalculateTransformationMatrices( TriangleUseSet &aTriangle,
 	Transform testTransform = Translate( -mass )*Transform(aArbitraryRotation, aArbitraryRotationInv)*Translate( mass );
 	Normal testNormal = Normalize( testTransform( neighborNormal ) );
 	float testValue = Dot( testNormal, normal );
+	if (!(testValue > 0.9995))
+	{
+		printf("Testvalue = %f\n", testValue);
+	}
 	assert( testValue > 0.9995 );
 #endif
 }
 
-void PointRepulsion::SetupSamplePoints()
+/*!
+ * \brief
+ * Add stratified sample points to the triangle mesh using a
+ * list of partial sums of the polygon areas
+ *
+ * returns number of sample points created on the surface of the object
+ */
+int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 {
-//	iNumberOfSamplePoints = 2;
-	int xSamples = 2;//static_cast<int>( ceil( sqrt( static_cast<float>(iNumberOfSamplePoints) ) ) );
+	float numberOfSamplePoints = GetTotalSurfaceArea()/(M_PI*aMeanFreePath*aMeanFreePath);
+	int xSamples = static_cast<int>( ceil( sqrt( numberOfSamplePoints ) ) );
 	int ySamples = xSamples;
 
-	iNumberOfSamplePoints = xSamples*ySamples;
+	int iNumberOfSamplePoints = xSamples*ySamples;
 	float* samples = new float[iNumberOfSamplePoints*2];
 
 	StratifiedSample2D(samples, xSamples, ySamples, false);
@@ -229,31 +257,42 @@ void PointRepulsion::SetupSamplePoints()
 	float* area = new float[iNumberOfTriangles];
 	ComputePartialAreaSum(area);
 
-	for (int i=0; i<xSamples*ySamples*2; i+=2)
+	printf("Area = %f\nNumber Of Sample Points = %d\n", GetTotalSurfaceArea(), iNumberOfSamplePoints);
+	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
 	{
-//		ComputeSamplePointPosition(area, samples[i], samples[i+1]);
+		if (i%1000000 == 0)
+		{
+			printf("Added %d sample points\n", i);
+		}
+		ComputeSamplePointPosition(area, samples[i], samples[i+1]);
 	}
 
-	// create testing sample points
-	Point* samplePoint = new Point( 0.1f, 0.0f, -0.5f);
+	//// create testing sample points
+	//Point* samplePoint = new Point( 1.0f, 0.1f, -0.5f);
 
-	iSamplePoints.push_back( samplePoint );
+	//iSamplePoints.push_back( samplePoint );
 
-	// constructor of PRSamplePointContainer will add a reference of samplePoint to the triangle the point is in
-	SamplePointContainer* samplePointContainer = new SamplePointContainer( samplePoint, &iTriangles.at(3) );
-	this->iSamplePointContainer.push_back( samplePointContainer );
+	//// constructor of PRSamplePointContainer will add a reference of samplePoint to the triangle the point is in
+	//SamplePointContainer* samplePointContainer = new SamplePointContainer( samplePoint, &iTriangles.at(5) );
+	//this->iSamplePointContainer.push_back( samplePointContainer );
 
-	samplePoint = new Point( 0.9f, 0.0f, -0.5f);
+	//samplePoint = new Point( 1.0f, 0.9f, -0.5f);
 
-	iSamplePoints.push_back( samplePoint );
+	//iSamplePoints.push_back( samplePoint );
 
-	// constructor of PRSamplePointContainer will add a reference of samplePoint to the triangle the point is in
-	samplePointContainer = new SamplePointContainer( samplePoint, &iTriangles.at(2) );
-	this->iSamplePointContainer.push_back( samplePointContainer );
+	//// constructor of PRSamplePointContainer will add a reference of samplePoint to the triangle the point is in
+	//samplePointContainer = new SamplePointContainer( samplePoint, &iTriangles.at(4) );
+	//this->iSamplePointContainer.push_back( samplePointContainer );
 
 	delete[] samples;
 	delete[] area;
-	return;
+
+
+	// compute the repulsive range r. This is based on the total area surface of the object
+	// and the amount of sample points (which has just been determined).
+	iRepulsiveRadius = 2*sqrt( (iTotalAreaOfSurface/iNumberOfSamplePoints) );
+
+	return iNumberOfSamplePoints;
 }
 
 void PointRepulsion::ComputePartialAreaSum( float* aArea )
@@ -264,7 +303,7 @@ void PointRepulsion::ComputePartialAreaSum( float* aArea )
 	// compute relative areas of the sub-triangles of polygon
 	while( triangleIter != iTriangles.end() )
 	{
-		aArea[i] = (*triangleIter).ComputeArea();
+		aArea[i] = (*triangleIter).GetArea();
 		triangleIter++;
 		i++;
 	}
@@ -334,7 +373,7 @@ void PointRepulsion::ComputeSamplePointPosition(float* aAreas, float s, float t)
 	this->iSamplePointContainer.push_back( samplePointContainer );
 }
 
-void PointRepulsion::ComputeRepulsiveForces()
+void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale )
 {
 	vector<TriangleUseSet>::iterator triangleIterator = iTriangles.begin();
 
@@ -343,7 +382,7 @@ void PointRepulsion::ComputeRepulsiveForces()
 		Reference<Matrix4x4> transform = new Matrix4x4;
 		vector<bool> triangleMapped(iNumberOfTriangles, false);
 
-		MapSamplePointsToPlane(  *triangleIterator, *triangleIterator, transform, triangleMapped );
+		MapSamplePointsToPlane(  *triangleIterator, *triangleIterator, transform, triangleMapped, aForceScale );
 
 		triangleIterator++;
 	}
@@ -370,10 +409,11 @@ void PointRepulsion::ComputeRepulsiveForces()
 void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle, 
 											TriangleUseSet& aMainTriangle,
 											Reference<Matrix4x4> aEdgeRotationMatrix,
-											vector<bool>& aTriangleMapped )
+											vector<bool>& aTriangleMapped,
+											const float& aForceScale )
 {
 	// repel the sample points on the sample point Triangle
-	ComputeRepulsiveForces(aCurrentTriangle, aMainTriangle, aEdgeRotationMatrix);
+	ComputeRepulsiveForces(aCurrentTriangle, aMainTriangle, aEdgeRotationMatrix , aForceScale);
 
 	// mark this triangle as "done". The points on this triangle have repelled the sample points on this triangle
 	aTriangleMapped[aCurrentTriangle.GetTriangleId()] = true;
@@ -410,21 +450,21 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle,
 #ifdef DEBUG_POINTREPULSION
 				Transform transform = Transform(edgeRotationMatrix, edgeRotationMatrix->Transpose());
 				Vector mass = Vector( *(*neighborIter)->iP0 );
-				Normal neighborNormal = neighborTriangle->ComputeNormal();
+				Normal neighborNormal = neighborTriangle->GetNormal();
 				Normal testNormal = Normalize( transform( neighborNormal ) );
-				float testValue = Dot( testNormal, aMainTriangle.ComputeNormal() );
+				float testValue = Dot( testNormal, aMainTriangle.GetNormal() );
 				assert( testValue > 0.9995 );
 
 				Point P0 = transform( *((*neighborTriangle).iVertices[0]) );
 				Point P1 = transform( *((*neighborTriangle).iVertices[1]) );
 				Point P2 = transform( *((*neighborTriangle).iVertices[2]) );
 
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.ComputeNormal(), *aMainTriangle.iVertices[0], P0) );
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.ComputeNormal(), *aMainTriangle.iVertices[0], P1) );
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.ComputeNormal(), *aMainTriangle.iVertices[0], P2) );
+				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P0) );
+				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P1) );
+				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P2) );
 #endif
 				// start evaluating the neighbor triangle
-				MapSamplePointsToPlane(*neighborTriangle, aMainTriangle, edgeRotationMatrix, aTriangleMapped);
+				MapSamplePointsToPlane(*neighborTriangle, aMainTriangle, edgeRotationMatrix, aTriangleMapped, aForceScale );
 			}
 		}
 
@@ -451,7 +491,8 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle,
  */
 void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
 											TriangleUseSet& aMainTriangle,
-											Reference<Matrix4x4> aEdgeRotationMatrix)
+											Reference<Matrix4x4> aEdgeRotationMatrix,
+											const float& aForceScale)
 {
 	list<SamplePointContainer* >::iterator mainTrianglePointIter = aMainTriangle.iSamplePoints.begin();
 	list<SamplePointContainer* >::iterator currentTrianglePointIter;
@@ -471,7 +512,7 @@ void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
 				Point mainSamplePoint = *((*mainTrianglePointIter)->GetSamplePoint());
 
 #ifdef DEBUG_POINTREPULSION
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.ComputeNormal(), mainSamplePoint, currentSamplePoint) );
+				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), mainSamplePoint, currentSamplePoint) );
 #endif
 
 				// calculate the direction of the force
@@ -482,7 +523,7 @@ void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
 				float repulsiveForce = 1 - (distance/iRepulsiveRadius);
 				if (repulsiveForce > 0.0f)
 				{
-					(*mainTrianglePointIter)->AddForceVector( Normalize(v)*repulsiveForce );
+					(*mainTrianglePointIter)->AddForceVector( Normalize(v)*repulsiveForce*aForceScale );
 				}
 			}
 
@@ -504,17 +545,18 @@ void PointRepulsion::ComputeNewPositions()
 		Point* p = container->GetSamplePoint();
 		Point pPrime = *p+container->GetForceVector();
 		TriangleUseSet* useSet = container->GetTriangle();
-		Reference<Matrix4x4> I = new Matrix4x4;
 	
-		ComputeNewPositions(pPrime, useSet, I, p );
+		ComputeNewPositions(pPrime, useSet, p, container );
 
 		container->ResetForceVector();
 	}
 }
 
-void PointRepulsion::ComputeNewPositions(Point& aPPrime, const TriangleUseSet* aUseSet,
-										 Reference<Matrix4x4> aEdgeRotationMatrixInv,
-										 Point* p)
+/*!
+ * \brief
+ * Moves the point using the computed force values
+ */
+void PointRepulsion::ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet, Point* p, SamplePointContainer* container)
 {
 	Neighbor* nextNeighbor = NULL;
 	Point p0, p1, edgePoint;
@@ -526,10 +568,17 @@ void PointRepulsion::ComputeNewPositions(Point& aPPrime, const TriangleUseSet* a
 	// the point of intersection with the edge
 	bool inside = PointInsideTriangle( aPPrime, *p, *aUseSet, &nextNeighbor, p0, p1, edgePoint );
 
+#ifdef DEBUG_POINTREPULSION
+	VeryVerySmallDistancePointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], edgePoint);
+#endif
 	// if the point is inside the triangle, point p becomes p' 
 	if (inside)
 	{
 		*p = aPPrime;
+		container->SetTriangle( aUseSet );
+#ifdef DEBUG_POINTREPULSION
+		assert( VeryVerySmallDistancePointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], *p) );
+#endif
 	}
 	else // the point lies outside the triangle.
 		 // We should by now have the neighbor p' might lay in, the intersection of the vector p->p' and with the edge
@@ -540,40 +589,33 @@ void PointRepulsion::ComputeNewPositions(Point& aPPrime, const TriangleUseSet* a
 
 		if (NULL != nextNeighbor)
 		{
-			// get triangle using nextNeighbor
-			Reference<Matrix4x4> edgeRotationMatrixInv = Matrix4x4::Mul(
-															Matrix4x4::Mul( nextNeighbor->iTranslateToAxis,
-																Matrix4x4::Mul( nextNeighbor->iArbitraryRotationInv,
-																	nextNeighbor->iTranslateToAxisInv ) ), aEdgeRotationMatrixInv );
+			// calculate a displacement vector from the point on the edge to pPrime
+			// and rotate the displacement vector so it's aligned with the neighboring triangle
+			Vector displacement( aPPrime-*p );
 
-			//// calculate a displacement vector from the point on the edge to pPrime
-			//// and rotate the displacement vector so it's aligned with the neighboring triangle
-			//Vector displacement( aPPrime-*p );
+			// rotate the displacement vector onto the triangle
+			Transform transform = Transform( nextNeighbor->iArbitraryRotationInv, nextNeighbor->iArbitraryRotation );
+			displacement = transform(displacement);
 
-			//// calculate a new pPrime using the point and a vector and 
-			//aPPrime = *p + displacement;
-
-			// rotate p' back onto the triangle
-			Transform transform = Transform( edgeRotationMatrixInv );
-			aPPrime = transform( aPPrime );
+			// calculate a new pPrime using the point and a vector and 
+			aPPrime = *p+displacement;
 
 #ifdef DEBUG_POINTREPULSION
-			Normal normal = aUseSet->ComputeNormal();
+			Normal normal = aUseSet->GetNormal();
 			Normal testNormal = Normalize( transform( normal ) );
 			float testValue = Dot( testNormal, normal );
 #endif
 
-			ComputeNewPositions( aPPrime, nextNeighbor->iEdgeNeighbor, edgeRotationMatrixInv, p);
-			
+			ComputeNewPositions( aPPrime, nextNeighbor->iEdgeNeighbor, p, container);
 		}
-		// Since there's no neighbor and we already put the point on the edge of the vertex, we return
-		//return;
+		else
+		{
+			container->SetTriangle( aUseSet );
+#ifdef DEBUG_POINTREPULSION
+			assert( VeryVerySmallDistancePointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], *p) );
+#endif
+		}
 	}
-
-	//Transform transform = Transform(aEdgeRotationMatrixInv, aEdgeRotationMatrixInv);
-	//Point newPoint = transform( *p );
-
-	//*p = newPoint;
 }
 
 
@@ -590,7 +632,7 @@ bool PointRepulsion::PointInsideTriangle( const Point& aPoint, const Point& aSta
 	Point b = *aTriangle.iVertices[1];
 	Point c = *aTriangle.iVertices[2];
 
-	Normal normal = aTriangle.ComputeNormal();
+	Normal normal = aTriangle.GetNormal();
 
 	vector<Neighbor*> neighbors;
 	aTriangle.GetAllEdgeNeighbors(neighbors);
@@ -690,6 +732,44 @@ Point PointRepulsion::LineLineIntersection( const Point& x1,const Point& x2,cons
 	return Point( x1+a*( numerator / denominator ) );
 }
 
+
+/**
+* @description ugly function that does a dynamic cast on an object. 
+* Hammer method used at full strength ;) in PBRT
+*
+* @param aTriangle
+* @return the object or NULL if is not of the return type
+*/
+inline Triangle* PointRepulsion::Cast(Reference<Shape>& aTriangle)
+{
+	Shape* triangle = aTriangle.operator ->();
+	return dynamic_cast<Triangle*> (triangle);
+}
+
+void PointRepulsion::FillUniformSamplePointStructure( vector<UniformPoint>& container )
+{
+	vector<SamplePointContainer *>::iterator it= iSamplePointContainer.begin();
+
+	for (;it != iSamplePointContainer.end(); it++)
+	{
+		Point* point =(*it)->GetSamplePoint();
+		TriangleUseSet* triangleUseSet = (*it)->GetTriangle();
+		Reference<Shape> triangle = triangleUseSet->GetTriangle();
+
+		UniformPoint uniformPoint;
+		uniformPoint.p = *point;
+		uniformPoint.n = triangleUseSet->GetNormal();
+		uniformPoint.triangle= triangleUseSet->GetTriangle();
+
+		container.push_back(uniformPoint);
+	};
+}
+
+float PointRepulsion::GetTotalSurfaceArea()
+{
+	return iTotalAreaOfSurface;
+}
+
 #ifdef DEBUG_POINTREPULSION
 
 bool PointRepulsion::VeryVerySmallDistancePointToPlane(Normal& aNormal, Point& aPoint, Point& aTestPoint )
@@ -703,6 +783,10 @@ bool PointRepulsion::VeryVerySmallDistancePointToPlane(Normal& aNormal, Point& a
 
 	bool status = ( distance<0.0001 );
 
+	if (status == false)
+	{
+		int i = 0;
+	}
 	return status;
 }
 
