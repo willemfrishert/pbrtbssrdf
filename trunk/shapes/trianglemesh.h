@@ -6,7 +6,12 @@
 * NO WARRANTY, express or implied, for this software.
 * (See file License.txt for complete license)
 */
+#include "shape.h"
+#include "paramset.h"
 
+#include "core/sampling.h"
+
+class PointRepulsion;
 
 
 // ###################### TriangleMesh class #############################
@@ -14,14 +19,11 @@ class TriangleMesh : public Shape
 {
 public:
 	// TriangleMesh Public Methods
-	TriangleMesh(const Transform &o2w, bool ro,
-		int ntris, int nverts, const int *vptr,
-		const Point *P, const Normal *N,
-		const Vector *S, const float *uv);
+	TriangleMesh(const Transform &o2w, bool ro, int ntris, int nverts, const int *vptr, const Point *P, const Normal *N, const Vector *S, const float *uv, const int aNumberOfIterations, const float aForceScalar);
 	~TriangleMesh();
 
 	//	virtual void GetUniformPointSamples(vector<Point>& container) const;
-	virtual void GetUniformPointSamples(vector<std::pair<Point, Normal > >& container) const;
+	virtual void GetUniformPointSamples(vector<UniformPoint>& container, float& pointArea, float meanFreePath) const;
 	BBox ObjectBound() const;
 	BBox WorldBound() const;
 	bool CanIntersect() const { return false; }
@@ -40,6 +42,9 @@ protected:
 	Normal *n;			// Normals
 	Vector *s;
 	float *uvs;
+
+	int iNumberOfIterations; // Number of iterations the point repulsion algorithm will take
+	float iForceScale;         // Scalar number
 };
 
 // ###################### Triangle class #############################
@@ -160,6 +165,11 @@ public:
 	}
 
 	Point Sample(float u1, float u2, Normal *Ns) const;
+
+	void GetVertexIndices(int** aIndices) const
+	{
+		*aIndices = v;
+	}
 
 	// methods
 private:
