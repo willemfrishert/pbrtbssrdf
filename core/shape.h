@@ -15,6 +15,14 @@
 #include "geometry.h"
 #include "transform.h"
 #include "paramset.h"
+
+struct UniformPoint
+{
+	Point p;
+	Normal n;
+	Reference<Shape> triangle;
+};
+
 // DifferentialGeometry Declarations
 struct COREDLL DifferentialGeometry
 {
@@ -120,7 +128,7 @@ public:
 	}
 
 	// returns an array of pairs of uniform sampled points with their normal over the current shape
-	virtual void GetUniformPointSamples(vector<std::pair<Point, Normal > >& container) const
+	void GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
 	{
 		Severe("Unimplemented Shape::GetUniformPointSamples method called");
 		return;
