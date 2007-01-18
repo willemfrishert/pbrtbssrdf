@@ -290,7 +290,7 @@ void ExOctree<ExNodeData, LookupProc>::Print(ExOctNode<ExNodeData> *node, FILE *
 			if ( node->children[ i ] )
 			{
 				// indent child
-				for (int i = 0; i < level; i++)
+				for (int l = 0; l < level; l++)
 				{
 					fprintf(f, "---");
 				}
