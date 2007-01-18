@@ -107,7 +107,7 @@ public:
 	}
 
 	// returns an array of pairs of uniform sampled points with their normal over the current shape
-	void GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
+	virtual void GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
 	{
 		Severe("Unimplemented Shape::GetUniformPointSamples method called");
 		return;
