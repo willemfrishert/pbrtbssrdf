@@ -1,9 +1,11 @@
 #include "pointrepulsion.h"
 #include "core/sampling.h"
 #include "transform.h"
-
 #include "TriangleMesh.h"
 
+#ifndef round
+#define round(x) (x<0?ceil((x)-0.5):floor((x)+0.5))
+#endif
 
 PointRepulsion::PointRepulsion( int aNumberOfTriangles, int aNumberOfVertices, int* aVertexIndex, 
 							   Point* aVertices, vector<Reference<Shape> >& aTriangleList  ) 
@@ -246,13 +248,15 @@ void PointRepulsion::CalculateTransformationMatrices( TriangleUseSet &aTriangle,
 int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 {
 	float numberOfSamplePoints = GetTotalSurfaceArea()/(M_PI*aMeanFreePath*aMeanFreePath);
+
 	int xSamples = static_cast<int>( ceil( sqrt( numberOfSamplePoints ) ) );
-	int ySamples = xSamples;
+	int ySamples = static_cast<int>( round( sqrt( numberOfSamplePoints ) ) );
+//	int ySamples = xSamples;
 
 	int iNumberOfSamplePoints = xSamples*ySamples;
 	float* samples = new float[iNumberOfSamplePoints*2];
 
-	StratifiedSample2D(samples, xSamples, ySamples, false);
+	StratifiedSample2D(samples, xSamples, ySamples, true);
 
 	float* area = new float[iNumberOfTriangles];
 	ComputePartialAreaSum(area);
@@ -260,10 +264,10 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 	printf("Area = %f\nNumber Of Sample Points = %d\n", GetTotalSurfaceArea(), iNumberOfSamplePoints);
 	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
 	{
-		if (i%1000000 == 0)
-		{
-			printf("Added %d sample points\n", i);
-		}
+		//if (i%1000000 == 0)
+		//{
+		//	printf("Added %d sample points\n", i);
+		//}
 		ComputeSamplePointPosition(area, samples[i], samples[i+1]);
 	}
 
