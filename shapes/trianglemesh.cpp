@@ -93,9 +93,6 @@ void TriangleMesh::Refine(vector<Reference<Shape> > &refined) const
 
 void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
 {
-	// TODO: fill me :P
-	// Working on it ;)
-
 	vector<Reference<Shape> > triangleList;	// container for the triangles
 	Refine( triangleList );
 

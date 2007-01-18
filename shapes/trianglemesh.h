@@ -24,6 +24,7 @@ public:
 
 	//	virtual void GetUniformPointSamples(vector<Point>& container) const;
 	virtual void GetUniformPointSamples(vector<UniformPoint>& container, float& pointArea, float meanFreePath) const;
+
 	BBox ObjectBound() const;
 	BBox WorldBound() const;
 	bool CanIntersect() const { return false; }
