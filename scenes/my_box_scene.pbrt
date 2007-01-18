@@ -1,0 +1,62 @@
+Film "image" 
+	"integer xresolution" [320] "integer yresolution" [240] "string filename" ["my_scene.exr"]
+
+#SurfaceIntegrator "bssrdfintegrator" "integer causticphotons" [200000]
+#        "integer indirectphotons" [00]
+#        "integer directphotons" [0]
+#        "integer finalgathersamples" [32]
+#            "bool finalgather" ["false"] "integer nused" [150]
+#    "bool directwithphotons" ["false"] "float maxdist" [.2]
+
+SurfaceIntegrator "bssrdfintegrator" "integer indirectphotons" [0]
+#SurfaceIntegrator "photonmap" "integer indirectphotons" [0]
+	"integer causticphotons" [0] "integer directphotons" [2]
+	"integer finalgather" [0] "float maxdist" [1]
+	"integer directwithphotons" [1] "integer nused" [200]
+
+Sampler "bestcandidate" "integer pixelsamples" [1]
+
+# Camera
+Translate -0.5 0.0 3.0
+LookAt 0 4.0 5.0 0 0 -1 0 1 0
+Camera "perspective" "float fov" [33]
+
+WorldBegin
+
+## light pointed originally on the positive z-axis
+AttributeBegin
+   AreaLightSource "area" "color L" [ 600 600 600 ]  "integer nsamples" [4]
+   Translate 0.75 5.0 2.5 
+   Rotate 120 1 0 0
+   Shape "disk" "float radius" [.2]
+AttributeEnd
+
+# *** floor
+AttributeBegin
+Translate 0 0 -3
+Material "matte" "color Kd" [.4 .4 .4]
+Shape "trianglemesh" "point P" [ -10 0 -10 10 0 -10 10 0 10 -10 0 10 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+# *** backwall
+AttributeBegin
+Translate 0 0 -3
+Material "matte" "color Kd" [.8 .8 .8]
+Shape "trianglemesh" "point P" [ -10 0 -10  10 0 -10  10 30 -10 -10 30 -10 ]
+	"integer indices" [ 0 1 2 2 3 0]
+AttributeEnd
+
+TransformBegin
+Scale 100 100 100 # .001 .001 .001
+Texture "c1" "color" "constant" "color value" [.8 .7 .2 ]
+Texture "c2" "color" "constant" "color value" [.2 .4 .8 ]
+Texture "check" "color" "checkerboard" "integer dimension" [3] "texture tex2" "c1"
+	"texture tex1" "c2"
+Material "matte" "texture Kd" "check"
+TransformEnd
+
+Material "bssrdfmaterial" "color sigmaPrimeS" [2.19 2.62 3.00] "color sigmaA" [0.0021 0.0041 0.0071] "float eta" [1.5]
+Include "geometry/my_box.pbrt"
+
+WorldEnd
