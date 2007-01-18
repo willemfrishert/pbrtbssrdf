@@ -21,16 +21,21 @@ COREDLL Spectrum UniformSampleAllLights(const Scene *scene,
 		int *lightSampleOffset, int *bsdfSampleOffset,
 		int *bsdfComponentOffset) {
 	Spectrum L(0.);
-	for (u_int i = 0; i < scene->lights.size(); ++i) {
+	
+	for (u_int i = 0; i < scene->lights.size(); ++i) 
+	{
 		Light *light = scene->lights[i];
 		int nSamples = (sample && lightSampleOffset) ?
 			sample->n2D[lightSampleOffset[i]] : 1;
+		
 		// Estimate direct lighting from _light_ samples
 		Spectrum Ld(0.);
 		for (int j = 0; j < nSamples; ++j)
+		{
 			Ld += EstimateDirect(scene, light, p, n, wo, bsdf,
 				sample, lightSampleOffset[i], bsdfSampleOffset[i],
 				bsdfComponentOffset[i], j);
+		}
 		L += Ld / nSamples;
 	}
 	return L;
@@ -111,8 +116,10 @@ Spectrum EstimateDirect(const Scene *scene,
         const Light *light, const Point &p,
 		const Normal &n, const Vector &wo,
 		BSDF *bsdf, const Sample *sample, int lightSamp,
-		int bsdfSamp, int bsdfComponent, u_int sampleNum) {
+		int bsdfSamp, int bsdfComponent, u_int sampleNum) 
+{
 	Spectrum Ld(0.);
+	
 	// Find light and BSDF sample values for direct lighting estimate
 	float ls1, ls2, bs1, bs2, bcs;
 	if (lightSamp != -1 && bsdfSamp != -1 &&
@@ -131,13 +138,16 @@ Spectrum EstimateDirect(const Scene *scene,
 		bs2 = RandomFloat();
 		bcs = RandomFloat();
 	}
+	
 	// Sample light source with multiple importance sampling
 	Vector wi;
 	float lightPdf, bsdfPdf;
 	VisibilityTester visibility;
 	Spectrum Li = light->Sample_L(p, n,
 		ls1, ls2, &wi, &lightPdf, &visibility);
-	if (lightPdf > 0. && !Li.Black()) {
+	
+	if (lightPdf > 0. && !Li.Black()) 
+	{
 		Spectrum f = bsdf->f(wo, wi);
 		if (!f.Black() && visibility.Unoccluded(scene)) {
 			// Add light's contribution to reflected radiance
@@ -151,6 +161,7 @@ Spectrum EstimateDirect(const Scene *scene,
 			}
 		}
 	}
+	
 	// Sample BSDF with multiple importance sampling
 	if (!light->IsDeltaLight()) {
 		BxDFType flags = BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
