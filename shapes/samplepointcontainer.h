@@ -6,11 +6,9 @@
 
 class SamplePointContainer
 {
-	//METHODS
 public:
 	SamplePointContainer(Point* aPoint, TriangleUseSet* aTriangle);
 	~SamplePointContainer();
-	// VARIABLES
 	Point* GetSamplePoint();
 	TriangleUseSet* GetTriangle();
 	void SetTriangle( TriangleUseSet* aTriangle );
@@ -45,6 +43,8 @@ void SamplePointContainer::SetTriangle( TriangleUseSet* aTriangle )
 	iTriangle->DeleteSamplePoint( this );
 
 	iTriangle = aTriangle;
+
+
 
 	iTriangle->AddSamplePoint( this );
 }
