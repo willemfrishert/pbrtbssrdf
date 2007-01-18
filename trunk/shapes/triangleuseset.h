@@ -6,6 +6,7 @@
 #include <list>
 using namespace std;
 
+class Triangle;
 class TriangleUseSet;
 class SamplePointContainer;
 
@@ -57,19 +58,19 @@ class TriangleUseSet
 {
 	//METHODS
 public:
-	TriangleUseSet(Point* aV1, Point* aV2, Point* aV3);
+	TriangleUseSet(Reference<Shape>& aTriangle, Point* aV1, Point* aV2, Point* aV3);
 	~TriangleUseSet();
 
 	void AddSamplePoint(SamplePointContainer* aSamplePoint);
 	void DeleteSamplePoint(SamplePointContainer* aSamplePoint);
-	float ComputeArea() const;
-	Normal ComputeNormal() const;
+	float GetArea() const;
+	Normal GetNormal() const;
 	void AddEdgeNeightbor( Neighbor* aEdgeNeighbor, u_int aPosition );
 	void GetEdgeNeighbors(vector<Neighbor*>& aNeighbor) const;
 	void GetAllEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const;
 	inline int GetTriangleId();
 	Vector GetCentroid();
-
+	Reference<Shape> GetTriangle();
 	Point* iVertices[3];
 	list<SamplePointContainer* > iSamplePoints;
 
@@ -77,29 +78,32 @@ private:
 	// VARIABLES
 	static int triangleCounter;
 
-	int triangleId;
+	int iTriangleId;
 	Neighbor* iEdgeNeighbors[3];
 	Vector iCentroid;
-	Normal iUnNormalizedNormal;
+
+	Normal iNormal;
+	float iTriangleArea;
+	Reference<Shape> iTriangle;
 };
 
 
 inline 
 int TriangleUseSet::GetTriangleId()
 {
-	return triangleId;
+	return iTriangleId;
 }
 
 inline
-Normal TriangleUseSet::ComputeNormal() const
+Normal TriangleUseSet::GetNormal() const
 {
-	return Normalize(iUnNormalizedNormal);
+	return iNormal;
 }
 
 inline
-float TriangleUseSet::ComputeArea() const
+float TriangleUseSet::GetArea() const
 {
-	return iUnNormalizedNormal.Length();
+	return iTriangleArea;
 }
 
 inline

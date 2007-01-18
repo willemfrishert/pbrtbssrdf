@@ -1,11 +1,12 @@
 #include "triangleuseset.h"
 #include "samplepointcontainer.h"
+#include "trianglemesh.h"
 
 int TriangleUseSet::triangleCounter=0;
 
-TriangleUseSet::TriangleUseSet( Point* aP1, Point* aP2, Point* aP3 )
+TriangleUseSet::TriangleUseSet(Reference<Shape>& aTriangle, Point* aP1, Point* aP2, Point* aP3 )
 {
-	triangleId = triangleCounter;
+	iTriangleId = triangleCounter;
 	triangleCounter++;
 
 	iVertices[0] = aP1;
@@ -20,7 +21,11 @@ TriangleUseSet::TriangleUseSet( Point* aP1, Point* aP2, Point* aP3 )
 	iCentroid.y = (iVertices[0]->y+iVertices[1]->y+iVertices[2]->y)*0.33f;
 	iCentroid.z = (iVertices[0]->z+iVertices[1]->z+iVertices[2]->z)*0.33f;
 
-	iUnNormalizedNormal = Normal( Cross( *aP2-*aP1, *aP3-*aP1 ) );
+	Vector crossProduct = Cross( *aP2-*aP1, *aP3-*aP1 );
+	iNormal = Normal( Normalize(crossProduct) );
+	iTriangleArea = crossProduct.Length();
+
+	iTriangle = aTriangle;
 }
 
 TriangleUseSet::~TriangleUseSet()
@@ -68,4 +73,9 @@ void TriangleUseSet::AddSamplePoint( SamplePointContainer* aSamplePoint )
 void TriangleUseSet::DeleteSamplePoint( SamplePointContainer* aSamplePoint )
 {
 	this->iSamplePoints.remove( aSamplePoint );
+}
+
+Reference<Shape> TriangleUseSet::GetTriangle()
+{
+	return iTriangle;
 }
