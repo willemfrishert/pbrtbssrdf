@@ -429,31 +429,19 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 	vector< Reference<GeometricPrimitive> > bssrdfObjects;
 	FindBSSRDFObjects(scene, bssrdfObjects);
 
-	/************************************************************************/
-	/* x                                                                    */
-	/************************************************************************/
 	vector< Reference<GeometricPrimitive> >::iterator primitiveIt = bssrdfObjects.begin();
-
-	//DebugBreak();
-
-	Reference<Shape> triangle;
-	Reference<Shape> triangle2;
-	Reference<Shape> triangle3;
-	Reference<Shape> triangle4;
-
 	BSSRDFMaterial* bssrdfMaterial = NULL;
+	float pointArea;
 
-	//float dummieRadius = 0.01f;
-	float dummieArea = /*M_PI * dummieRadius * dummieRadius*/1.125f;
-
-	vector< Reference<Shape> > tris;
+	FILE* f;
+	fopen_s(&f , "octree.out", "w");
 
 	for (int i = 0; primitiveIt != bssrdfObjects.end(); primitiveIt++, i++)
 	{
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
 		Reference<Shape> mesh = primitive->getShape();
 		bssrdfMaterial = BSSRDFIntegrator::Cast( primitive->getMaterial() );
-		mesh->GetUniformPointSamples(container, dummieArea, bssrdfMaterial->lu);
+		mesh->GetUniformPointSamples(container, pointArea, bssrdfMaterial->lu);
 
 		// Compute scene's BB, and extend it a little more 
 		// (due to floating-point errors in scene intersections - p. 765): 
@@ -464,110 +452,21 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		wb.pMax += delta;
 		bssrdfMaterial->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb);
 
-		// TODO: substitute 'dummie' by 'container'
-		vector< pair<Point, Normal> > dummie;
-		vector< pair<Point, Normal> >::iterator pointIt = dummie.begin();
-		
-		mesh->Refine( tris );
+		vector<UniformPoint>::iterator pointIt = container.begin();
 
-		triangle = tris[0];
-		triangle2 = tris[1];
-		triangle3 = tris[2];
+		fprintf(f, " ###################### POINTS ######################\n");
 
-		//
-		// TODO: Must use the points that Will is computing
-		// compute irradiance at all points in the container
-		//for (; pointIt != dummie.end(); pointIt++)
-		//{
-		//	ComputeIrradiance(pointIt->first, pointIt->second, 1.00000000000000f, shape, scene);
-		//}
+		for (; pointIt != container.end(); pointIt++)
+		{
+			UniformPoint uniformPoint = *pointIt;
+			ComputeIrradiance(uniformPoint.p, uniformPoint.n, pointArea, uniformPoint.triangle, 
+				primitive->getMaterial(), scene);
+			fprintf(f, " Pv(%.4f, %.4f, %.4f)\n", uniformPoint.p.x, uniformPoint.p.y, uniformPoint.p.z);
+		}
+
 	}
+	fprintf(f, " ###################### POINTS END ######################");
 
-	vector<pair<Point, Normal>> pn;
-	Reference<Material> dummieMat = bssrdfMaterial;
-	
-	// Front
-	Point pA(1.0f, 0.5f, 0.0f);
-	Point pB(0.5f, 1.0f, 0.0f);
-	// Right
-	Point pC(1.5f, 0.5f, -1.0f);
-	Point pD(1.5f, 1.0f, -0.5f);
-	// Back
-	Point pE(1.0f, 0.5f, -1.5f);
-	Point pF(0.5f, 1.0f, -1.5f);
-	// Left
-	Point pG(0.0f, 0.5f, -1.0f);
-	Point pH(0.0f, 1.0f, -0.5f);
-	// Top
-	Point pI(1.0f, 1.5f, -0.5f);
-	Point pJ(0.5f, 1.5f, -1.0f);
-	// Bottom
-	Point pK(1.0f, 0.0f, -0.5f);
-	Point pL(0.5f, 0.0f, -1.0f);
-
-	// Front
-	Normal nA(0,0,1);
-	Normal nB(0,0,1);
-	// Right
-	Normal nC(1,0,0);
-	Normal nD(1,0,0);
-	// Back
-	Normal nE(0,0,-1);
-	Normal nF(0,0,-1);
-	// Left
-	Normal nG(-1,0,0);
-	Normal nH(-1,0,0);
-	// Top
-	Normal nI(0,1,0);
-	Normal nJ(0,1,0);
-	// Bottom
-	Normal nK(0,-1,0);
-	Normal nL(0,-1,0);
-
-	// Front
-	pn.push_back(make_pair(pA, nA));
-	pn.push_back(make_pair(pB, nB));
-	// Back
-	pn.push_back(make_pair(pF, nF));
-	pn.push_back(make_pair(pE, nE));
-	// Bottom
-	pn.push_back(make_pair(pL, nL));
-	pn.push_back(make_pair(pK, nK));
-	// Top
-	pn.push_back(make_pair(pI, nI));
-	pn.push_back(make_pair(pJ, nJ));
-	// Left
-	pn.push_back(make_pair(pH, nH));
-	pn.push_back(make_pair(pG, nG));
-	// Right
-	pn.push_back(make_pair(pC, nC));
-	pn.push_back(make_pair(pD, nD));
-
-	vector<pair<Point, Normal>>::iterator pnIt = pn.begin();
-	vector<Reference<Shape>>::iterator trisIt = tris.begin();
-
-	for (; pnIt != pn.end(); pnIt++, trisIt++)
-	{
-		ComputeIrradiance(pnIt->first, pnIt->second, dummieArea, *trisIt, 
-			dummieMat, scene);
-	}
-	
-	
-
-	//ComputeIrradiance(Point(0.05f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle, 
-	//	dummieMat, scene);
-
-	//ComputeIrradiance(Point(0.02f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle2, 
-	//	dummieMat, scene);
-
-	//ComputeIrradiance(Point(0.07f, 0.05f, 0.0f), Normal(0, 0, 1), dummieArea, triangle3, 
-	//	dummieMat, scene);
-
-	//ComputeIrradiance(Point(-0.5f, 1.0f, -1.0f), Normal(0, 0, 1), dummieArea * 10, triangle4, 
-	//	bssrdfMaterial, scene);
-
-	FILE* f;
-	fopen_s(&f , "octree.out", "w");
 	bssrdfMaterial->bssrdfIrradianceValues->Print(f);
 	fclose(f);
 
