@@ -15,7 +15,7 @@ BSSRDFMaterial::BSSRDFMaterial( const Spectrum& sigmaPrimeS, const Spectrum& sig
 	// the first, etai is the air's index of refraction, and the 
 	// second one, the material's index of refraction
 	// NOTE: file translucent.cpp line 60
-	fresnel = new FresnelDielectric(eta, 1.0f);
+	fresnel = new FresnelDielectric(1.0f, eta);
 
 	// it's used the Luminance value of the Spectrum to compute the Mean Free Path
 	//float sigmaTrLuminance = sigmaTr.y();

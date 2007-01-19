@@ -29,6 +29,15 @@ struct IrradBSSRDFSample
 		fprintf(f, " Pv(%.4f, %.4f, %.4f)", Pv.x, Pv.y, Pv.z);
 	}
 
+	static inline void CheckAverageLocation(IrradBSSRDFSample& sample);
+
+	void operator+=(const IrradBSSRDFSample& sample)
+	{
+		this->Ev += sample.Ev;
+		this->Av += sample.Av;
+		this->Pv += sample.Pv;
+	}
+
 
 	// The total irradiance on the node
 	Spectrum Ev;
@@ -38,6 +47,9 @@ struct IrradBSSRDFSample
 
 	// The average location of the points, weighted by the irradiance
 	Point Pv;
+
+	// True if the location is already averaged or it's a leaf node
+	bool averaged;
 };
 
 /**
@@ -52,7 +64,7 @@ struct IrradBSSRDFProcess
 
 	Spectrum Lo(float w);
 
-	void evaluate(const Point &P, const vector<IrradBSSRDFSample> &samples);
+	void evaluate(const Point &P, vector<IrradBSSRDFSample> &samples);
 
 	/**
 	* @param P
@@ -76,49 +88,35 @@ struct IrradBSSRDFProcess
 	}
 
 	/**
-	* @description adds information to an intermediate node regarding 
-	*	a sample (future leaf) being inserted.
-	*
-	* @param node
-	* @param dataItem
-	* @param dataBound
-	* @param nodeBound
-	*/
+	 * @description adds information to an intermediate node about 
+	 *	a sample (future leaf) being inserted.
+	 *
+	 * @param node
+	 * @param dataItem
+	 * @param dataBound
+	 * @param nodeBound
+	 */
 	void addChildNode(ExOctNode<IrradBSSRDFSample> *node, const IrradBSSRDFSample &dataItem, 
 		const BBox &dataBound, const BBox &nodeBound) const
 	{
-		IrradBSSRDFSample sample;
+		IrradBSSRDFSample sample = dataItem;
 
-		// if not empty, it means it already has a sample 
-		if ( ! node->data.empty() )
-		{
-			sample = node->data[ 0 ];
-		}
-
-		// Add up the point's area Av
-		sample.Av += dataItem.Av;
-
-		// Add up the Irradiance Ev
-		sample.Ev += dataItem.Ev;
-
-		u_int t = node->childLeaves;
-		float invT = 1 / static_cast<float>(t);
-
-		// recursive average computation:
-		// Add the average position weighted by the 'weighted irradiance'
+		// Add the position weighted by the 'weighted irradiance'
 		// It's assumed that the Spectrum's irradiance intensity is the Luminance value
-		Point weightedPv = dataItem.Pv/* * dataItem.Ev.y()*/;
-
-		sample.Pv = ((t - 1) * invT) * sample.Pv + ( invT * weightedPv);
+		// It will be averaged when visited
+		Point weightedPv = dataItem.Pv * dataItem.Ev.y();
+		sample.Pv = weightedPv;
 
 		// if empty, push it into the vector
+		// it means it's the first time information is being added to the intermediate node
 		if ( node->data.empty() )
 		{
+			sample.averaged = false;
 			node->data.push_back( sample );
 		}
-		else
+		else // otherwise, just add it up
 		{
-			node->data[ 0 ] = sample;
+			node->data[ 0 ] += sample;
 		}
 	}
 
@@ -242,14 +240,27 @@ public:
 	float lu;
 };
 
-void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample> &samples)
+inline void IrradBSSRDFSample::CheckAverageLocation(IrradBSSRDFSample& sample)
 {
-	vector<IrradBSSRDFSample>::const_iterator sampleIt = samples.begin();
+	if ( ! sample.averaged )
+	{
+		sample.Pv /= sample.Ev.y();
+		sample.averaged = true;
+	}
+}
+
+void IrradBSSRDFProcess::evaluate(const Point &P, vector<IrradBSSRDFSample> &samples)
+{
+	vector<IrradBSSRDFSample>::iterator sampleIt = samples.begin();
 	for (; sampleIt != samples.end(); sampleIt++)
 	{
-		IrradBSSRDFSample smp = *sampleIt;
-		float r = (smp.Pv - P).Length();
-		float rSqr = r * r;
+		IrradBSSRDFSample& smp = *sampleIt;
+
+		// check if average location has already been computed
+		IrradBSSRDFSample::CheckAverageLocation( smp );
+
+		//float r = (smp.Pv - P).Length();
+		float rSqr = (smp.Pv - P).LengthSquared();
 		float dr = sqrt(rSqr + zr * zr);
 		float dv = sqrt(rSqr + zv * zv);
 		
@@ -274,7 +285,12 @@ void IrradBSSRDFProcess::evaluate(const Point &P, const vector<IrradBSSRDFSample
 		//printf("MULT("); (C1 * term2 * C2 * term4).Print(stdout); printf(") -- ");
 		
 		Mo += Fdt * Rd * smp.Ev * smp.Av;
+		/************************************************************************/
+		/* TODO: REMOVE THE NEXT LINE. DEBUG ONLY                             */
+		/************************************************************************/
+		int i = 0;
 		//printf("Mo("); Mo.Print(stdout); printf(")\n\n");
+		//printf("*");
 	}
 
 }
@@ -308,7 +324,7 @@ Spectrum IrradBSSRDFProcess::Lo(float w)
 	// Fresnel transmittance: 1 - Fresnel reflectance
 	Spectrum Ft = -this->material->fresnel->Evaluate(w) + 1;
 
-	Spectrum Lo = (Ft / Fdr) * (Mo / M_PI);
+	Spectrum Lo = /*(Ft / Fdr) * */(Mo / M_PI);
 
 	//fprintf(f, "Mo("); Mo.Print(f); fprintf(f, ")  ");
 	//fprintf(f, "Lo("); Lo.Print(f); fprintf(f, ")\n");
