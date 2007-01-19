@@ -28,6 +28,8 @@ PointRepulsion::PointRepulsion( int aNumberOfTriangles, int aNumberOfVertices, i
 		triangleIter++;
 	}
 
+	ComputePartialAreaSum( iPartialAreaSums );
+
 	// add stratified sample points to the triangle mesh using a
 	// list of partial sums of the polygon areas
 	//SetupSamplePoints();
@@ -41,6 +43,19 @@ PointRepulsion::PointRepulsion( int aNumberOfTriangles, int aNumberOfVertices, i
 	//	ComputeRepulsiveForces();
 	//	ComputeNewPositions();
 	//}
+
+	// testing binary search
+	//iNumberOfTriangles = 4;
+	//vector<float> areas;
+	//areas.push_back( 0.1 );
+	//areas.push_back( 0.3 );
+	//areas.push_back( 0.6 );
+	//areas.push_back( 1.0 );
+	//int i = SearchForTriangle(0.05, areas, iNumberOfTriangles/2 );
+	//i = SearchForTriangle(0.2, areas, iNumberOfTriangles/2 );
+	//i = SearchForTriangle(0.5, areas, iNumberOfTriangles/2 );
+	//i = SearchForTriangle(0.7, areas, iNumberOfTriangles/2 );
+	//i = SearchForTriangle(1.0, areas, iNumberOfTriangles/2 );
 }
 
 PointRepulsion::~PointRepulsion()
@@ -258,9 +273,6 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 
 	StratifiedSample2D(samples, xSamples, ySamples, true);
 
-	float* area = new float[iNumberOfTriangles];
-	ComputePartialAreaSum(area);
-
 	printf("Area = %f\nNumber Of Sample Points = %d\n", GetTotalSurfaceArea(), iNumberOfSamplePoints);
 	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
 	{
@@ -268,7 +280,7 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 		//{
 		//	printf("Added %d sample points\n", i);
 		//}
-		ComputeSamplePointPosition(area, samples[i], samples[i+1]);
+		ComputeSamplePointPosition(iPartialAreaSums , samples[i], samples[i+1]);
 	}
 
 	//// create testing sample points
@@ -289,7 +301,6 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 	//this->iSamplePointContainer.push_back( samplePointContainer );
 
 	delete[] samples;
-	delete[] area;
 
 
 	// compute the repulsive range r. This is based on the total area surface of the object
@@ -299,16 +310,18 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 	return iNumberOfSamplePoints;
 }
 
-void PointRepulsion::ComputePartialAreaSum( float* aArea )
+void PointRepulsion::ComputePartialAreaSum( vector<float>& aArea )
 {
 	vector<TriangleUseSet>::iterator triangleIter = this->iTriangles.begin();
 	int i = 0;
 
+	float areaSum = 0;
+
 	// compute relative areas of the sub-triangles of polygon
-	while( triangleIter != iTriangles.end() )
+	for( ;triangleIter != iTriangles.end(); triangleIter++ )
 	{
-		aArea[i] = (*triangleIter).GetArea();
-		triangleIter++;
+		areaSum += (*triangleIter).GetArea();
+		aArea.push_back( areaSum );
 		i++;
 	}
 
@@ -334,25 +347,28 @@ void PointRepulsion::ComputePartialAreaSum( float* aArea )
  * random position between 0 and 1
  * 
  */
-void PointRepulsion::ComputeSamplePointPosition(float* aAreas, float s, float t)
+void PointRepulsion::ComputeSamplePointPosition( vector<float>& aPartialAreaSums, float s, float t )
 { 
 	int i;
 	float areaSum = 0;
 	float a,b,c;
 
-	/* use 's' to pick one sub-triangle, weighted by relative */
-	/* area of triangles */
-	for (i = 0; i < iNumberOfTriangles; i++)
-	{
-		areaSum += aAreas[i];
-		if (areaSum >= s)
-		{
-			break;
-		}
-	}
+	// use 's' to pick one sub-triangle, weighted by relative
+	// area of triangles
+	//for (i = 0; i < iNumberOfTriangles; i++)
+	//{
+	//	areaSum += aAreas[i];
+	//	if (areaSum >= s)
+	//	{
+	//		break;
+	//	}
+	//}
+
+	i = SearchForTriangle(s, aPartialAreaSums, 0, iNumberOfTriangles/2, iNumberOfTriangles );
+	float normalizedTriangleArea = iTriangles.at(i).GetArea()/iTotalAreaOfSurface;
 
 	/* map 's' into the interval [0,1] */
-	s = (s - areaSum + aAreas[i]) / aAreas[i];
+	s = (s - aPartialAreaSums[i] + normalizedTriangleArea) / normalizedTriangleArea;
 
 	/* map (s,t) to a point in that sub-triangle */
 	t = sqrt(t);
@@ -772,6 +788,45 @@ void PointRepulsion::FillUniformSamplePointStructure( vector<UniformPoint>& cont
 float PointRepulsion::GetTotalSurfaceArea()
 {
 	return iTotalAreaOfSurface;
+}
+
+int PointRepulsion::SearchForTriangle( const float aS, const vector<float>& aAreas, int min, int i, int max  )
+{
+	// hit the end of the vector of partial area sums
+	if ( (i+1) >= iNumberOfTriangles)
+	{
+		return iNumberOfTriangles-1;
+	}
+	
+	// hit the beginning of the vector of partial area sums
+	if ( i <= 0)
+	{
+		return i;
+	}
+
+	// if current partial area sum is bigger than s...
+	if ( aS < aAreas[i]	)
+	{
+		// check if the partial area sum on the left side is smaller than or equal to s
+		if (aS >= aAreas[i-1] )
+		{
+			return i;
+		}
+		else 
+		{
+			max = i;
+			i = static_cast<int>( min+(max-min)/2.0f );
+			// the partial area sum on the left side is not smaller or equal to s, check futher on the left side
+			return SearchForTriangle(aS, aAreas, min, i, max  );
+		}
+	}
+	else
+	{
+		min = i;
+		i = static_cast<int>( min+(max-min)/2.0f );
+		//this partial area sum is smaller or equal to s, check on the right side
+		return SearchForTriangle(aS, aAreas, min, i, max );
+	}
 }
 
 #ifdef DEBUG_POINTREPULSION

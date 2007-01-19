@@ -29,8 +29,8 @@ private:
 										 Reference<Matrix4x4>& aArbitraryRotationInv, float& aRotationAngle);
 
 
-	void ComputePartialAreaSum(float* aArea);
-	void ComputeSamplePointPosition(float* aAreas, float s, float t);
+	void ComputePartialAreaSum(vector<float>& aArea);
+	void ComputeSamplePointPosition(vector<float>& aPartialAreaSums, float s, float t);
 
 	void MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle, TriangleUseSet& aMainTriangle, Reference<Matrix4x4> aEdgeRotationMatrix, vector<bool>& aTriangleMapped, const float& aForceScale);
 	void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
@@ -44,6 +44,7 @@ private:
 	bool LineSegLineSegIntersection(const Point& x1, const Point& x2, const Point& x3, const Point& x4, Point& p );
 	bool PointBetweenTwoPoints(const Point& x1, const Point x2, const Point& testPoint);
 	static Triangle* Cast(Reference<Shape>& aTriangle);
+	int SearchForTriangle(const float aS, const vector<float>& aAreas, int min, int i, int max );
 
 #ifdef DEBUG_POINTREPULSION
 	bool VeryVerySmallDistancePointToPlane(Normal& aNormal, Point& aPoint, Point& aTestPoint );
@@ -59,6 +60,8 @@ private:
 	vector<Point* > iSamplePoints;
 	vector<SamplePointContainer *> iSamplePointContainer;
 	vector<TriangleUseSet> iTriangles;
+
+	vector<float> iPartialAreaSums;
 };
 
 
