@@ -20,6 +20,12 @@ int mouseState = 0;
 int xCenter = 0;
 int yCenter = 0;
 
+bool initpoints = true;
+bool repelpoints = true;
+bool endpoints = true;
+float numberOfIterations;
+float numberOfSamples;
+
 #define M_ROTATE_XY     1
 
 struct Point3d 
@@ -31,9 +37,20 @@ struct Point3d
 	float z;
 };
 
-void ParseFile( string fileName, vector<Point3d>& iPoints )
+void ParseFile( string fileName, vector<Point3d>& iPoints, bool storeMetaData )
 {
 	fstream input( fileName.c_str(), fstream::in);
+	float nrOfIterations;
+	float nrOfSamples;
+
+	input >> nrOfIterations;
+	input >> nrOfSamples;
+	
+	if (storeMetaData)
+	{
+		numberOfIterations = nrOfIterations;
+		numberOfSamples = nrOfSamples;
+	}
 
 	while(!input.eof())
 	{
@@ -53,39 +70,57 @@ vector<Point3d> turkPoints;
 
 void displayVec(vector<Point3d>& points)
 {
-	vector<Point3d>::iterator it = initialPoints.begin();
-	
-	glColor3f(1, 0, 0);
-	glPushMatrix();
-	glTranslatef(-0.75, -0.75, 0.75);
-	glBegin(GL_POINTS);
-		for (; it != initialPoints.end(); it++)
+	vector<Point3d>::iterator it;
+
+	if (initpoints)
+	{
+		it = initialPoints.begin();
+
+		glColor3f(1, 0, 0);
+		glPushMatrix();
+		glTranslatef(-0.75, -0.75, 0.75);
+		glBegin(GL_POINTS);
+		for (;it != initialPoints.end(); it++)
 		{
 			Point3d p = *it;
 			glVertex3f(p.x, p.y, p.z);
 		}
-	glEnd();
-	glPopMatrix();
+		glEnd();
+		glPopMatrix();
 
+	}
 
-	it = turkPoints.begin();
 
 	glColor3f(0, 0, 1);
 	glPushMatrix();
 	glTranslatef(-0.75, -0.75, 0.75);
 	glBegin(GL_POINTS);
-	for (; it != turkPoints.end(); it++)
+	it = turkPoints.begin();
+
+	for (int i =0 ; it != turkPoints.end(); it++, i++)
 	{
 		Point3d p = *it;
-		glVertex3f(p.x, p.y, p.z);
+		if (endpoints)
+		{
+			if (i >= ((numberOfIterations-1)*numberOfSamples))
+			{
+				glColor3f(0,1,0);
+				glVertex3f(p.x, p.y, p.z);
+			}
+		}
+		if (repelpoints)
+		{
+			glVertex3f(p.x, p.y, p.z);
+		}
+
 	}
 	glEnd();
 	glPopMatrix();
-
+	
 
 
 	glColor3f(1,1,1);
-//	glutWireCube( 1.5 );
+	glutWireCube( 1.5 );
 
 	glColor3f(0,0,0);
 	glutSolidCube( 1.499 );
@@ -96,7 +131,7 @@ void init() {
 	//glEnable(GL_LIGHTING);
 	//glEnable(GL_LIGHT0);
 	glEnable(GL_DEPTH_TEST);
-	glPointSize(5.0);
+	glPointSize(3.0);
 	glColor3f(1, 0, 0);
 
 	glClearColor(0, 0, 0, 0);
@@ -111,7 +146,8 @@ void display(void) {
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
-	glTranslatef(0, 0, -4);
+	glPushMatrix();
+	glTranslatef(-0.3, 0, -3.3);
 
 	glPushMatrix();
 	/* "World" rotation, controlled by mouse */
@@ -121,8 +157,10 @@ void display(void) {
 	displayVec( initialPoints );
 
 	glPopMatrix();
+	glPopMatrix();
 
 	glPushMatrix();
+	glTranslatef(0, 0, -4);
 	glColor3f(1, 0, 0);
 	glTranslatef(0.75, -0.5, 1.0);
 	glBegin(GL_POINTS);
@@ -153,17 +191,25 @@ void reshape(int w, int h) {
 	glViewport(0, 0, (GLsizei)w, (GLsizei)h);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(45, (GLdouble)w/(GLdouble)h, 0.1, 10);
+	gluPerspective(45, (GLdouble)w/(GLdouble)h, 0.1, 100);
 	glMatrixMode(GL_MODELVIEW);
 }
 
 void keyboard(unsigned char key, int x, int y) {
 
-//	switch (key) {
-////	 case 3:             /* Ctrl-C */
-////	 case 27:            /* ESC */
-////		 exit(0);
-//	}
+	switch (key) {
+	 case 3:             /* Ctrl-C */
+	 case 27:            /* ESC */
+		 exit(0);
+	 case 'r':
+		 repelpoints = !repelpoints;
+		 break;
+	 case 'i':
+		 initpoints = !initpoints;
+		 break;
+	 case 'e':
+		 endpoints = !endpoints;
+	}
 }
 
 void mouse(int button, int state, int x, int y) {
@@ -194,9 +240,9 @@ int main(int argc, char **argv) {
 	//points.push_back( Point3d(0, 1, 0) );
 	//points.push_back( Point3d(1, 0, 0) );
 
-	ParseFile("../../scenes/stratified2D.txt", stratifiedPoints);
-	ParseFile("../../scenes/mapped3D.txt", initialPoints );
-	ParseFile("../../scenes/turk3D.txt", turkPoints );
+	ParseFile("../../scenes/stratified2D.txt", stratifiedPoints, false);
+	ParseFile("../../scenes/mapped3D.txt", initialPoints, false );
+	ParseFile("../../scenes/turk3D.txt", turkPoints, true );
 	
 
 	glutInit(&argc, argv);
