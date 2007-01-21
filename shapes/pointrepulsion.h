@@ -18,7 +18,7 @@ public:
 	~PointRepulsion();
 	int SetupSamplePoints( float aMeanFreePath );
 	void ComputeRepulsiveForces( const float& aForceScale );
-	void ComputeNewPositions();
+	void ComputeNewPositions( int iteration );
 	void FillUniformSamplePointStructure( vector<UniformPoint>& container );
 	float GetTotalSurfaceArea();
 
@@ -40,16 +40,13 @@ private:
 	bool PointInsideTriangle(const Point& aPoint, const Point& aStartPoint, const TriangleUseSet& aTriangle, Neighbor** aNeighbor, Point& aP0, Point& aP1, Point& aEdgePoint);
 	Point LineLineIntersection(const Point& x1,const Point& x2,const Point& x3,const Point& x4 );
 
-	void ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet, Point* p, SamplePointContainer* container);
+	void ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet, Point* p, SamplePointContainer* container, float& vectorLength);
 	bool LineSegLineSegIntersection(const Point& x1, const Point& x2, const Point& x3, const Point& x4, Point& p );
 	bool PointBetweenTwoPoints(const Point& x1, const Point x2, const Point& testPoint);
 	static Triangle* Cast(Reference<Shape>& aTriangle);
-	int SearchForTriangle(const float aS, const vector<float>& aAreas, int min, int i, int max );
-
-#ifdef DEBUG_POINTREPULSION
-	bool VeryVerySmallDistancePointToPlane(Normal& aNormal, Point& aPoint, Point& aTestPoint );
-#endif
-
+	int SearchForTriangle(const float aS, const vector<float>& aAreas, int lower, int upper );
+	void PushPointToPlane(const Normal& aNormal, const Point& aPoint, Point& aTestPoint );
+	bool PointCloseToPlane( const Normal& aNormal, const Point& aPoint, Point& aTestPoint );
 	int iNumberOfTriangles;
 	int iNumberOfVertices;
 	int *iVertexIndex;

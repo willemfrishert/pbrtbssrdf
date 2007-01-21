@@ -3,9 +3,36 @@
 #include "transform.h"
 #include "TriangleMesh.h"
 
+#include <iostream>
+#include <fstream>
+using namespace std;
+
 #ifndef round
 #define round(x) (x<0?ceil((x)-0.5):floor((x)+0.5))
 #endif
+
+//struct Point3d
+//{
+//	float x;
+//	float y;
+//	float z;
+//};
+//
+//void ParseFile( string fileName, vector<Point3d>& points )
+//{
+//	fstream input( fileName.c_str(), fstream::in);
+//
+//	while(!input.eof())
+//	{
+//		Point3d p;
+//		input >> p.x >> p.y >> p.z;
+//		points.push_back(p);
+//	}
+//
+//	points.pop_back();
+//
+//	input.close();
+//}
 
 PointRepulsion::PointRepulsion( int aNumberOfTriangles, int aNumberOfVertices, int* aVertexIndex, 
 							   Point* aVertices, vector<Reference<Shape> >& aTriangleList  ) 
@@ -15,17 +42,18 @@ PointRepulsion::PointRepulsion( int aNumberOfTriangles, int aNumberOfVertices, i
 , iVertices( aVertices)
 , iTotalAreaOfSurface( 0.0f )
 {	
+	printf("Number Of Triangles: %d\n", iNumberOfTriangles);
 	// setup the triangle structure (find edge neighbors)
 	SetupTriangleUseSets( aTriangleList );
 
 	// compute the total area of the object
 	vector<TriangleUseSet>::iterator triangleIter = this->iTriangles.begin();
 
-	while ( triangleIter != this->iTriangles.end() ) 
+
+	for ( ; triangleIter != this->iTriangles.end(); triangleIter++ ) 
 	{
 		iTotalAreaOfSurface += (*triangleIter).GetArea();
-		printf("accumilated area = %f\n", iTotalAreaOfSurface);
-		triangleIter++;
+		//printf("accumilated area = %f\n", iTotalAreaOfSurface);
 	}
 
 	ComputePartialAreaSum( iPartialAreaSums );
@@ -97,6 +125,7 @@ void PointRepulsion::SetupTriangleUseSets(vector<Reference<Shape> >& aTriangleLi
 		this->iTriangles.push_back( triangleUseSet );
 	}
 
+	ProgressReporter progress(iNumberOfTriangles, "Linking Triangle Usesets");
 	// loop through all the indices to find triangle neighbors
 	for (int i=0; i<iNumberOfTriangles;i++)
 	{
@@ -210,6 +239,8 @@ void PointRepulsion::SetupTriangleUseSets(vector<Reference<Shape> >& aTriangleLi
 				this->iTriangles.at(j).AddEdgeNeightbor( neighbori, edgePositionNeighbor );
 			}
 		}
+
+		progress.Update();
 	}
 }
 
@@ -262,27 +293,42 @@ void PointRepulsion::CalculateTransformationMatrices( TriangleUseSet &aTriangle,
  */
 int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 {
-	float numberOfSamplePoints = GetTotalSurfaceArea()/(M_PI*aMeanFreePath*aMeanFreePath);
-
+	float numberOfSamplePoints = GetTotalSurfaceArea()/(M_PI*aMeanFreePath*aMeanFreePath)*10;
+	printf("Number of sample points: %f\n", numberOfSamplePoints);
 	int xSamples = static_cast<int>( ceil( sqrt( numberOfSamplePoints ) ) );
 	int ySamples = static_cast<int>( round( sqrt( numberOfSamplePoints ) ) );
 //	int ySamples = xSamples;
 
-	int iNumberOfSamplePoints = xSamples*ySamples;
-	float* samples = new float[iNumberOfSamplePoints*2];
+	//int iNumberOfSamplePoints = xSamples*ySamples;
+	//float* samples = new float[iNumberOfSamplePoints*2];
+	//StratifiedSample2D(samples, xSamples, ySamples, false);
 
-	StratifiedSample2D(samples, xSamples, ySamples, true);
+	float* samples = new float[numberOfSamplePoints*2];
+//	LatinHypercube(samples, numberOfSamplePoints, 2);
+	LDShuffleScrambled2D(numberOfSamplePoints, 1, samples);
 
-	printf("Area = %f\nNumber Of Sample Points = %d\n", GetTotalSurfaceArea(), iNumberOfSamplePoints);
-	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
-	{
-		//if (i%1000000 == 0)
-		//{
-		//	printf("Added %d sample points\n", i);
-		//}
-		ComputeSamplePointPosition(iPartialAreaSums , samples[i], samples[i+1]);
-	}
+	int iNumberOfSamplePoints = numberOfSamplePoints;
 
+
+	/************************************************************************/
+	/*                                                                      */
+	/************************************************************************/
+	//delete [] samples;
+
+	//iNumberOfSamplePoints = 3;
+	//samples = new float[iNumberOfSamplePoints*2];
+	//samples[0] = 0.35f;
+	//samples[1] = 0.6f;
+
+	//samples[2] = 0.45f;
+	//samples[3] = 0.3f;
+
+	//samples[4] = 0.8f;
+	//samples[5] = 0.6f;
+
+	/************************************************************************/
+	/*                                                                      */
+	/************************************************************************/
 	//// create testing sample points
 	//Point* samplePoint = new Point( 1.0f, 0.1f, -0.5f);
 
@@ -300,13 +346,44 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 	//samplePointContainer = new SamplePointContainer( samplePoint, &iTriangles.at(4) );
 	//this->iSamplePointContainer.push_back( samplePointContainer );
 
+	fstream outfile("stratified2D.txt", fstream::out);
+	outfile << "1" << endl;
+	outfile << iNumberOfSamplePoints << endl;
+
+	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
+	{
+		outfile << samples[i] << " " << samples[i+1] << " " << 0.0 << " ";
+	}
+	outfile.close();
+
+	//vector<Point3d> points;
+	//ParseFile( "stratified2D.txt", points );
+
+	printf("Area = %f\nNumber Of Sample Points = %d\n", GetTotalSurfaceArea(), iNumberOfSamplePoints);
+	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
+	{
+		//if (i%1000000 == 0)
+		//{
+		//	printf("Added %d sample points\n", i);
+		//}
+		ComputeSamplePointPosition(iPartialAreaSums , samples[i], samples[i+1]);
+	}
+	//for (int i=0; i<iSamplePoints.size(); i++)
+	//{
+	//	outfile << iSamplePoints.at(i)->x << " " << iSamplePoints.at(i)->y << " " << iSamplePoints.at(i)->z << " ";
+	//}
+	//outfile.close();
+
+
 	delete[] samples;
 
 
 	// compute the repulsive range r. This is based on the total area surface of the object
 	// and the amount of sample points (which has just been determined).
+//	iRepulsiveRadius = sqrt(iTotalAreaOfSurface/(M_PI*iNumberOfSamplePoints));
 	iRepulsiveRadius = 2*sqrt( (iTotalAreaOfSurface/iNumberOfSamplePoints) );
 
+	printf("iRepulsiveRadius = %f", iRepulsiveRadius);
 	return iNumberOfSamplePoints;
 }
 
@@ -316,6 +393,9 @@ void PointRepulsion::ComputePartialAreaSum( vector<float>& aArea )
 	int i = 0;
 
 	float areaSum = 0;
+
+	// TODO: calculate total area together with partial sums
+
 
 	// compute relative areas of the sub-triangles of polygon
 	for( ;triangleIter != iTriangles.end(); triangleIter++ )
@@ -353,29 +433,30 @@ void PointRepulsion::ComputeSamplePointPosition( vector<float>& aPartialAreaSums
 	float areaSum = 0;
 	float a,b,c;
 
-	// use 's' to pick one sub-triangle, weighted by relative
-	// area of triangles
-	//for (i = 0; i < iNumberOfTriangles; i++)
-	//{
-	//	areaSum += aAreas[i];
-	//	if (areaSum >= s)
-	//	{
-	//		break;
-	//	}
-	//}
-
-	i = SearchForTriangle(s, aPartialAreaSums, 0, iNumberOfTriangles/2, iNumberOfTriangles );
+	i = SearchForTriangle(s, aPartialAreaSums, 0, iNumberOfTriangles-1 );
 	float normalizedTriangleArea = iTriangles.at(i).GetArea()/iTotalAreaOfSurface;
 
-	/* map 's' into the interval [0,1] */
+	//map 's' into the interval [0,1]
 	s = (s - aPartialAreaSums[i] + normalizedTriangleArea) / normalizedTriangleArea;
 
-	/* map (s,t) to a point in that sub-triangle */
+	//map (s,t) to a point in that sub-triangle
 	t = sqrt(t);
 
 	a = 1 - t;
 	b = (1 - s) * t;
 	c = s * t;
+
+
+
+	//if (t+s > 1)
+	//{
+	//	s = 1 - s;
+	//	t = 1 - t;
+	//}
+
+	//a = 1 - t - s;
+	//b = t;
+	//c = s;
 
 	Point* samplePoint = new Point;
 	Point* vertex0 = iTriangles.at(i).iVertices[0];
@@ -397,26 +478,29 @@ void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale )
 {
 	vector<TriangleUseSet>::iterator triangleIterator = iTriangles.begin();
 
-	while ( triangleIterator != iTriangles.end() )
-	{
+	//while ( triangleIterator != iTriangles.end() )
+	//{
 		Reference<Matrix4x4> transform = new Matrix4x4;
 		vector<bool> triangleMapped(iNumberOfTriangles, false);
 
+		//triangleMapped[0]=false;
+		//triangleMapped[1]=false;
+
 		MapSamplePointsToPlane(  *triangleIterator, *triangleIterator, transform, triangleMapped, aForceScale );
 
-		triangleIterator++;
-	}
+	//	triangleIterator++;
+	//}
 }
 
 /*!
  * \brief
  * Rotating sample points to make them coplanar with the main triangle
  * 
- * \param aCurrentTriangle
+ * \param aEvaluatedTriangle
  * The current triangle that is being evaluated
  * 
  * \param aMainTriangle
- * Description of parameter aMainTriangle.
+ * the triangle that contains the plane
  *
  * \param aEdgeRotationMatrix
  * the composed matrix which will rotate the sample points of the 
@@ -426,20 +510,20 @@ void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale )
  * A list of triangles that have already been evaluated. This prevents triangles from being re-evaluated
  * 
  */
-void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle, 
+void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aEvaluatedTriangle, 
 											TriangleUseSet& aMainTriangle,
 											Reference<Matrix4x4> aEdgeRotationMatrix,
 											vector<bool>& aTriangleMapped,
 											const float& aForceScale )
 {
 	// repel the sample points on the sample point Triangle
-	ComputeRepulsiveForces(aCurrentTriangle, aMainTriangle, aEdgeRotationMatrix , aForceScale);
+	ComputeRepulsiveForces(aEvaluatedTriangle, aMainTriangle, aEdgeRotationMatrix , aForceScale);
 
 	// mark this triangle as "done". The points on this triangle have repelled the sample points on this triangle
-	aTriangleMapped[aCurrentTriangle.GetTriangleId()] = true;
+	aTriangleMapped[aEvaluatedTriangle.GetTriangleId()] = true;
 
 	vector<Neighbor*> neighbors;
-	aCurrentTriangle.GetEdgeNeighbors( neighbors );
+	aEvaluatedTriangle.GetEdgeNeighbors( neighbors );
 	vector<Neighbor*>::iterator neighborIter = neighbors.begin();
 	vector<Neighbor*>::iterator neighborIterEnd = neighbors.end();
 	while( neighborIter != neighborIterEnd )
@@ -455,7 +539,7 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle,
 			// if distance between the center of the neighboring triangle and 
 			//   center of main triangle > radius repelling force
 			// no need to continue checking neighbors
-			Vector range = aMainTriangle.GetCentroid()-neighborTriangle->GetCentroid();
+			Vector range = 0;//aMainTriangle.GetCentroid()-neighborTriangle->GetCentroid();
 			if (range.Length() < iRepulsiveRadius)
 			{
 	
@@ -479,9 +563,9 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle,
 				Point P1 = transform( *((*neighborTriangle).iVertices[1]) );
 				Point P2 = transform( *((*neighborTriangle).iVertices[2]) );
 
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P0) );
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P1) );
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P2) );
+				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P0) );
+				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P1) );
+				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P2) );
 #endif
 				// start evaluating the neighbor triangle
 				MapSamplePointsToPlane(*neighborTriangle, aMainTriangle, edgeRotationMatrix, aTriangleMapped, aForceScale );
@@ -497,7 +581,7 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle,
  * Calculate the repulsive force each sample point laying on ACurrentTriangle 
  * exerts on each sample point laying on aMainTriangle.
  * 
- * \param aCurrentTriangle
+ * \param aEvaluatedTriangle
  * the triangle containing the points which will be evaluated. The sample points on this
  * triangle will exert forces
  * 
@@ -509,7 +593,7 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle,
  * in which aMainTriangle lies.
  *
  */
-void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
+void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aEvaluatedTriangle,
 											TriangleUseSet& aMainTriangle,
 											Reference<Matrix4x4> aEdgeRotationMatrix,
 											const float& aForceScale)
@@ -519,30 +603,30 @@ void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
 
 	while ( mainTrianglePointIter != aMainTriangle.iSamplePoints.end() )
 	{	
-		currentTrianglePointIter = aCurrentTriangle.iSamplePoints.begin();
+		currentTrianglePointIter = aEvaluatedTriangle.iSamplePoints.begin();
+		Point mainSamplePoint = *((*mainTrianglePointIter)->GetSamplePoint());
 
-		while( currentTrianglePointIter != aCurrentTriangle.iSamplePoints.end())
+		while( currentTrianglePointIter != aEvaluatedTriangle.iSamplePoints.end())
 		{
 			// check if the sample point and repelling point are not the same
 			if ( (*mainTrianglePointIter) != (*currentTrianglePointIter) )
 			{
 
 				Transform transform(aEdgeRotationMatrix);
-				Point currentSamplePoint = transform( *((*currentTrianglePointIter)->GetSamplePoint()) );
-				Point mainSamplePoint = *((*mainTrianglePointIter)->GetSamplePoint());
+				Point evaluatedSamplePoint = transform( *((*currentTrianglePointIter)->GetSamplePoint()) );
 
-#ifdef DEBUG_POINTREPULSION
-				assert( VeryVerySmallDistancePointToPlane(aMainTriangle.GetNormal(), mainSamplePoint, currentSamplePoint) );
-#endif
+				// make sure the point is exactly on the plane
+				PushPointToPlane(aMainTriangle.GetNormal(), mainSamplePoint, evaluatedSamplePoint);
 
 				// calculate the direction of the force
-				Vector v(mainSamplePoint - currentSamplePoint);
+				Vector v(mainSamplePoint - evaluatedSamplePoint);
 
 				// calculate the repulsive force. Falls off linearly with distance between the two points.
 				float distance = v.Length();
-				float repulsiveForce = 1 - (distance/iRepulsiveRadius);
+				float repulsiveForce = iRepulsiveRadius-distance;
 				if (repulsiveForce > 0.0f)
 				{
+//					(*currentTrianglePointIter)->AddForceVector( Normalize(v)*repulsiveForce*aForceScale );
 					(*mainTrianglePointIter)->AddForceVector( Normalize(v)*repulsiveForce*aForceScale );
 				}
 			}
@@ -554,55 +638,94 @@ void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
 	}
 }
 
-void PointRepulsion::ComputeNewPositions()
+void PointRepulsion::ComputeNewPositions( int iteration )
 {
 	// iterate through all sample points
 	vector<SamplePointContainer* >::iterator samplePointIter = iSamplePointContainer.begin();
 
-	for(; samplePointIter != iSamplePointContainer.end(); samplePointIter++ )
+	static float averageOld = 0.0f;
+	float average = 0.0f;
+	int i = 0;
+	for(; samplePointIter != iSamplePointContainer.end(); samplePointIter++, i++ )
 	{
 		SamplePointContainer* container = *samplePointIter;
+		Vector force = container->GetForceVector();
+
+		average += force.Length();
+
 		Point* p = container->GetSamplePoint();
-		Point pPrime = *p+container->GetForceVector();
+		Point pPrime = *p + force;
+
+		Vector v(pPrime-*p);
 		TriangleUseSet* useSet = container->GetTriangle();
 	
-		ComputeNewPositions(pPrime, useSet, p, container );
+		float vectorLength = 0.0f;
+
+		//if ( i == 3 )
+		//{
+			//printf("Position = [ %f %f %f ]\n", p->x, p->y, p->z);
+			//printf("Force = [ %f %f %f ]\n", force.x, force.y,  force.z );
+		//}
+		ComputeNewPositions( pPrime, useSet, p, container, vectorLength );
+
+		if (force.Length() != vectorLength )
+		{
+			int k=0;
+		}
 
 		container->ResetForceVector();
 	}
+
+	average = average/iSamplePointContainer.size();
+	printf("\nAverage force vector length = %f\n", average );
+	printf("Difference previous - current = %f\n", averageOld - average );
+
+
+	averageOld = average;
 }
 
 /*!
  * \brief
  * Moves the point using the computed force values
  */
-void PointRepulsion::ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet, Point* p, SamplePointContainer* container)
+void PointRepulsion::ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet, Point* p, SamplePointContainer* container, float& vectorLength)
 {
 	Neighbor* nextNeighbor = NULL;
 	Point p0, p1, edgePoint;
 
 	// find out if the "new" position of the sample point lies inside this triangle or outside.
-	// if it lies outside hint of the direction of the new point are provided through:
+	// if it lies outside, the direction of the new point are provided through:
 	// the neighboring triangle where the point might lay in
 	// the edge (p0 and p1) which is intersected
 	// the point of intersection with the edge
 	bool inside = PointInsideTriangle( aPPrime, *p, *aUseSet, &nextNeighbor, p0, p1, edgePoint );
 
-#ifdef DEBUG_POINTREPULSION
-	VeryVerySmallDistancePointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], edgePoint);
-#endif
+//	PushPointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], edgePoint);
 	// if the point is inside the triangle, point p becomes p' 
 	if (inside)
 	{
+		//Point tempPoint = aPPrime;
+		//PushPointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], tempPoint);
+		//if ( (fabs(tempPoint.x) > 1.5001f) || (fabs(tempPoint.y) > 1.5001f) || (fabs(tempPoint.z) > 1.5001f))
+		//{
+		//	int i = 0;
+		//}
+
+		//Vector v(aPPrime-*p);
+		//vectorLength += v.Length();
 		*p = aPPrime;
 		container->SetTriangle( aUseSet );
-#ifdef DEBUG_POINTREPULSION
-		assert( VeryVerySmallDistancePointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], *p) );
-#endif
+//		PushPointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], *p);
+
+		//if ( (fabs(p->x) > 1.5001f) || (fabs(p->y) > 1.5001f) || (fabs(p->z) > 1.5001f))
+		//{
+		//	printf( "\n\nFatal: Point in space!!!\n\n");
+		//}
 	}
 	else // the point lies outside the triangle.
 		 // We should by now have the neighbor p' might lay in, the intersection of the vector p->p' and with the edge
 	{
+		vectorLength += Vector(edgePoint-*p).Length();
 		// The point is pushed over an edge so we compute the intersection point
 		// shortening the begin point
 		*p = edgePoint;
@@ -620,20 +743,30 @@ void PointRepulsion::ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet
 			// calculate a new pPrime using the point and a vector and 
 			aPPrime = *p+displacement;
 
+			//if ( !PointCloseToPlane(nextNeighbor->iEdgeNeighbor->GetNormal(), 
+			//					   *nextNeighbor->iEdgeNeighbor->iVertices[0],
+			//					   aPPrime) )
+			//{
+			//	PointCloseToPlane(nextNeighbor->iEdgeNeighbor->GetNormal(), 
+			//		*nextNeighbor->iEdgeNeighbor->iVertices[0],
+			//		aPPrime);
+			PushPointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], aPPrime);
+			//}
+
 #ifdef DEBUG_POINTREPULSION
 			Normal normal = aUseSet->GetNormal();
 			Normal testNormal = Normalize( transform( normal ) );
 			float testValue = Dot( testNormal, normal );
 #endif
 
-			ComputeNewPositions( aPPrime, nextNeighbor->iEdgeNeighbor, p, container);
+			ComputeNewPositions( aPPrime, nextNeighbor->iEdgeNeighbor, p, container, vectorLength);
 		}
 		else
 		{
 			container->SetTriangle( aUseSet );
-#ifdef DEBUG_POINTREPULSION
-			assert( VeryVerySmallDistancePointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], *p) );
-#endif
+//#ifdef DEBUG_POINTREPULSION
+//			assert( PushPointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], *p) );
+//#endif
 		}
 	}
 }
@@ -790,48 +923,31 @@ float PointRepulsion::GetTotalSurfaceArea()
 	return iTotalAreaOfSurface;
 }
 
-int PointRepulsion::SearchForTriangle( const float aS, const vector<float>& aAreas, int min, int i, int max  )
+int PointRepulsion::SearchForTriangle( const float aS, const vector<float>& aAreas, int lower, int upper  )
 {
-	// hit the end of the vector of partial area sums
-	if ( (i+1) >= iNumberOfTriangles)
-	{
-		return iNumberOfTriangles-1;
-	}
-	
+	int numberOfElements = (upper - lower);
+
 	// hit the beginning of the vector of partial area sums
-	if ( i <= 0)
+	if ( numberOfElements <= 1)
 	{
-		return i;
+		return (aS>aAreas[lower]) ? upper: lower;
 	}
 
-	// if current partial area sum is bigger than s...
-	if ( aS < aAreas[i]	)
+	int middle = lower+(numberOfElements)/2;
+
+	if ( aS < aAreas[middle] )
 	{
-		// check if the partial area sum on the left side is smaller than or equal to s
-		if (aS >= aAreas[i-1] )
-		{
-			return i;
-		}
-		else 
-		{
-			max = i;
-			i = static_cast<int>( min+(max-min)/2.0f );
-			// the partial area sum on the left side is not smaller or equal to s, check futher on the left side
-			return SearchForTriangle(aS, aAreas, min, i, max  );
-		}
+		// the partial area sum on the left side is not smaller or equal to s, check futher on the left side
+		return SearchForTriangle(aS, aAreas, lower, middle  );
 	}
 	else
 	{
-		min = i;
-		i = static_cast<int>( min+(max-min)/2.0f );
 		//this partial area sum is smaller or equal to s, check on the right side
-		return SearchForTriangle(aS, aAreas, min, i, max );
+		return SearchForTriangle(aS, aAreas, middle, upper );
 	}
 }
 
-#ifdef DEBUG_POINTREPULSION
-
-bool PointRepulsion::VeryVerySmallDistancePointToPlane(Normal& aNormal, Point& aPoint, Point& aTestPoint )
+void PointRepulsion::PushPointToPlane( const Normal& aNormal, const Point& aPoint, Point& aTestPoint  )
 {
 	float a = aNormal.x;
 	float b = aNormal.y;
@@ -840,13 +956,25 @@ bool PointRepulsion::VeryVerySmallDistancePointToPlane(Normal& aNormal, Point& a
 
 	float distance = ( abs( a*aTestPoint.x + b*aTestPoint.y + c*aTestPoint.z + d ) ) / ( aNormal.Length() );
 
-	bool status = ( distance<0.0001 );
 
-	if (status == false)
+	if (distance>0.0000001)
 	{
-		int i = 0;
+		Vector invNormal( -aNormal.x, -aNormal.y, -aNormal.z);
+		invNormal *= distance;
+		aTestPoint += invNormal;
 	}
-	return status;
+
+	distance = ( abs( a*aTestPoint.x + b*aTestPoint.y + c*aTestPoint.z + d ) ) / ( aNormal.Length() );
 }
 
-#endif
+bool PointRepulsion::PointCloseToPlane( const Normal& aNormal, const Point& aPoint, Point& aTestPoint  )
+{
+	float a = aNormal.x;
+	float b = aNormal.y;
+	float c = aNormal.z;
+	float d = -(Dot(aNormal, Vector(aPoint) ));
+
+	float distance = ( abs( a*aTestPoint.x + b*aTestPoint.y + c*aTestPoint.z + d ) ) / ( aNormal.Length() );
+
+	return (!(distance>0.0001));
+}

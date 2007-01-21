@@ -31,6 +31,10 @@ public:
 
 	void Refine(vector<Reference<Shape> > &refined) const;
 
+
+	void PrintSamplePointsToFile( vector<UniformPoint>& container, string aFileName ) const;
+
+
 	friend class Triangle;
 	template <class T> friend class VertexTexture;
 

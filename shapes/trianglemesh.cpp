@@ -2,6 +2,9 @@
 #include "trianglemesh.h"
 #include "pointrepulsion.h"
 
+#include <iostream>
+#include <fstream>
+using namespace std;
 // TriangleMesh Method Definitions
 // ###################### TriangleMesh Method Definitions #############################
 TriangleMesh::TriangleMesh( const Transform &o2w, bool ro, int nt, int nv,
@@ -97,23 +100,69 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 	Refine( triangleList );
 
 	PointRepulsion pr( ntris, nverts, vertexIndex, p, triangleList);
+	
 
-//	DebugBreak();
-	//// create sample points based on the mean free path and the area of the object.
-	//// the area is already computed inside
+	// create sample points based on the mean free path and the area of the object.
+	// the area is already computed inside
 	int numberOfSamplePoints = pr.SetupSamplePoints( meanFreePath );
 
+	// save initial points
+	fstream outfile("mapped3D.txt", fstream::out);
+	outfile << "1" << endl;
+	outfile << numberOfSamplePoints << endl;
+	outfile.close();
+
+	pr.FillUniformSamplePointStructure( container );
+	PrintSamplePointsToFile( container, "mapped3D.txt" );
+	container.clear();
+
+
+
+	// setup header for turk points
+	outfile.open("turk3D.txt", fstream::out);
+	outfile << iNumberOfIterations << endl;
+	outfile << numberOfSamplePoints << endl;
+	outfile.close();
+
+
+	ProgressReporter progress(iNumberOfIterations, "Applying point repulsion");
 	// relaxation of the random points 
 	for(int k = 0; k<iNumberOfIterations; k++)
 	{
 		pr.ComputeRepulsiveForces( iForceScale );
-		pr.ComputeNewPositions();
-	}
+		pr.ComputeNewPositions( k );
+		progress.Update();
 
+		// collect the information
+		pr.FillUniformSamplePointStructure( container );
+		PrintSamplePointsToFile( container, "turk3D.txt" );
+		container.clear();
+
+	}
+	progress.Update();
 	// collect the information
 	pr.FillUniformSamplePointStructure( container );
 
 	pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
+}
+
+
+void TriangleMesh::PrintSamplePointsToFile( vector<UniformPoint>& container, string aFileName ) const
+{
+	fstream outfile;
+	outfile.open(aFileName.c_str(), fstream::out | fstream::app);
+
+	int maximum=container.size();
+	for (int i=0; i<maximum; i++)
+	{
+		outfile << container.at(i).p.x << " " << container.at(i).p.y << " " << container.at(i).p.z;
+		if ((i+1)<maximum)
+		{
+			outfile << " ";
+		}
+	}
+	outfile << endl;
+	outfile.close();
 }
 
 // ###################### Triangle Method Definitions #############################
@@ -441,7 +490,7 @@ extern "C" DLLEXPORT Shape *CreateShape(const Transform &o2w, bool reverseOrient
 		numberOfIterations = pIterations[0];
 	}
 
-	float forceScale = 1.0f;
+	float forceScale = 0.05f;
 	int nForceScale = 0;
 	const float *pForceScale = params.FindFloat("forcescale", &amount);
 	if (pForceScale)
