@@ -32,7 +32,8 @@ private:
 	void ComputePartialAreaSum(vector<float>& aArea);
 	void ComputeSamplePointPosition(vector<float>& aPartialAreaSums, float s, float t);
 
-	void MapSamplePointsToPlane(TriangleUseSet& aCurrentTriangle, TriangleUseSet& aMainTriangle, Reference<Matrix4x4> aEdgeRotationMatrix, vector<bool>& aTriangleMapped, const float& aForceScale);
+	void MapSamplePointsToPlane(list< pair<TriangleUseSet*, Reference<Matrix4x4> > >& aTriangleQueue, TriangleUseSet& aMainTriangle,
+								vector<bool>& aTriangleMapped, const float& aForceScale);
 	void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aCurrentTriangle,
 												TriangleUseSet& aMainTriangle,
 												Reference<Matrix4x4> aEdgeRotationMatrix,

@@ -478,18 +478,22 @@ void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale )
 {
 	vector<TriangleUseSet>::iterator triangleIterator = iTriangles.begin();
 
-	//while ( triangleIterator != iTriangles.end() )
-	//{
+	list< pair<TriangleUseSet*, Reference<Matrix4x4> > > triangleQueue;
+	while ( triangleIterator != iTriangles.end() )
+	{
+
 		Reference<Matrix4x4> transform = new Matrix4x4;
 		vector<bool> triangleMapped(iNumberOfTriangles, false);
 
-		//triangleMapped[0]=false;
-		//triangleMapped[1]=false;
+		triangleMapped[(*triangleIterator).GetTriangleId()] = true;
 
-		MapSamplePointsToPlane(  *triangleIterator, *triangleIterator, transform, triangleMapped, aForceScale );
+		triangleQueue.push_back( make_pair(&(*triangleIterator), transform) );
 
-	//	triangleIterator++;
-	//}
+		MapSamplePointsToPlane( triangleQueue, *triangleIterator, triangleMapped, aForceScale );
+
+		triangleQueue.clear();
+		triangleIterator++;
+	}
 }
 
 /*!
@@ -510,23 +514,26 @@ void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale )
  * A list of triangles that have already been evaluated. This prevents triangles from being re-evaluated
  * 
  */
-void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aEvaluatedTriangle, 
-											TriangleUseSet& aMainTriangle,
-											Reference<Matrix4x4> aEdgeRotationMatrix,
-											vector<bool>& aTriangleMapped,
+void PointRepulsion::MapSamplePointsToPlane(list< pair<TriangleUseSet*, Reference<Matrix4x4> > >& aTriangleQueue,
+											TriangleUseSet& aMainTriangle, vector<bool>& aTriangleMapped, 
 											const float& aForceScale )
 {
-	// repel the sample points on the sample point Triangle
-	ComputeRepulsiveForces(aEvaluatedTriangle, aMainTriangle, aEdgeRotationMatrix , aForceScale);
+	pair<TriangleUseSet*, Reference<Matrix4x4> > trianglePair = aTriangleQueue.front();
+	aTriangleQueue.pop_front();
 
-	// mark this triangle as "done". The points on this triangle have repelled the sample points on this triangle
-	aTriangleMapped[aEvaluatedTriangle.GetTriangleId()] = true;
+	TriangleUseSet* evaluatedTriangle = trianglePair.first;
+	Reference<Matrix4x4> aEdgeRotationMatrix = trianglePair.second;
+
+	ComputeRepulsiveForces(*evaluatedTriangle, aMainTriangle, aEdgeRotationMatrix , aForceScale);
+
 
 	vector<Neighbor*> neighbors;
-	aEvaluatedTriangle.GetEdgeNeighbors( neighbors );
+	evaluatedTriangle->GetEdgeNeighbors( neighbors );
+
 	vector<Neighbor*>::iterator neighborIter = neighbors.begin();
 	vector<Neighbor*>::iterator neighborIterEnd = neighbors.end();
-	while( neighborIter != neighborIterEnd )
+
+	for (; neighborIter != neighborIterEnd; neighborIter++)
 	{
 		//pointers to neighboring edge triangles of the current triangle that is being evaluated
 		TriangleUseSet* neighborTriangle = (*neighborIter)->iEdgeNeighbor;
@@ -535,45 +542,121 @@ void PointRepulsion::MapSamplePointsToPlane(TriangleUseSet& aEvaluatedTriangle,
 		// then it means that the sample points have already been rotated
 		// and their repulsive forces have already been computed and stored.
 		if (false == aTriangleMapped[neighborTriangle->GetTriangleId()])
-		{	
-			// if distance between the center of the neighboring triangle and 
-			//   center of main triangle > radius repelling force
-			// no need to continue checking neighbors
-			Vector range = 0;//aMainTriangle.GetCentroid()-neighborTriangle->GetCentroid();
+		{
+			Reference<Matrix4x4> edgeRotationMatrix = Matrix4x4::Mul( aEdgeRotationMatrix, 
+														Matrix4x4::Mul( (*neighborIter)->iTranslateToAxis,
+															Matrix4x4::Mul( (*neighborIter)->iArbitraryRotation,
+																			(*neighborIter)->iTranslateToAxisInv ) ) );
+			Transform transform(edgeRotationMatrix);
+			Vector centroid = transform(neighborTriangle->GetCentroid());
+			Vector range = 0;//aMainTriangle.GetCentroid() - centroid;
+
 			if (range.Length() < iRepulsiveRadius)
 			{
-	
-				// the edgeRotationMatrix concatenates the rotation and translation matrices which is used
-				// to rotate the neigbors triangle to make it coplanar with the main triangle.
-				// The code simply looks like:
-				// edgeRotationMatrix = aEdgeRotationMatrix*TranslateToAxisInv*ArbitraryRotation*TranslationToAxis
-				Reference<Matrix4x4> edgeRotationMatrix = Matrix4x4::Mul( aEdgeRotationMatrix, 
-															Matrix4x4::Mul( (*neighborIter)->iTranslateToAxis,
-																Matrix4x4::Mul( (*neighborIter)->iArbitraryRotation,
-																		(*neighborIter)->iTranslateToAxisInv ) ) );
-#ifdef DEBUG_POINTREPULSION
-				Transform transform = Transform(edgeRotationMatrix, edgeRotationMatrix->Transpose());
-				Vector mass = Vector( *(*neighborIter)->iP0 );
-				Normal neighborNormal = neighborTriangle->GetNormal();
-				Normal testNormal = Normalize( transform( neighborNormal ) );
-				float testValue = Dot( testNormal, aMainTriangle.GetNormal() );
-				assert( testValue > 0.9995 );
-
-				Point P0 = transform( *((*neighborTriangle).iVertices[0]) );
-				Point P1 = transform( *((*neighborTriangle).iVertices[1]) );
-				Point P2 = transform( *((*neighborTriangle).iVertices[2]) );
-
-				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P0) );
-				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P1) );
-				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P2) );
-#endif
-				// start evaluating the neighbor triangle
-				MapSamplePointsToPlane(*neighborTriangle, aMainTriangle, edgeRotationMatrix, aTriangleMapped, aForceScale );
+				// we add the triangle use set to the list to be evaluated and mark it as evaluated so it won't be added again
+				aTriangleQueue.push_back( make_pair(neighborTriangle, edgeRotationMatrix) );
 			}
 		}
-
-		neighborIter++;
+		aTriangleMapped[neighborTriangle->GetTriangleId()] = true;
 	}
+
+	if (!aTriangleQueue.empty())
+	{
+		MapSamplePointsToPlane( aTriangleQueue, aMainTriangle, aTriangleMapped, aForceScale );
+	}
+	//		// if distance between the center of the neighboring triangle and 
+	//		//   center of main triangle > radius repelling force
+	//		// no need to continue checking neighbors
+	//		Vector range = 0;//aMainTriangle.GetCentroid()-neighborTriangle->GetCentroid();
+	//		if (range.Length() < iRepulsiveRadius)
+	//		{
+	//			// the edgeRotationMatrix concatenates the rotation and translation matrices which is used
+	//			// to rotate the neigbors triangle to make it coplanar with the main triangle.
+	//			// The code simply looks like:
+	//			// edgeRotationMatrix = aEdgeRotationMatrix*TranslateToAxisInv*ArbitraryRotation*TranslationToAxis
+	//			Reference<Matrix4x4> edgeRotationMatrix = Matrix4x4::Mul( aEdgeRotationMatrix, 
+	//														Matrix4x4::Mul( (*neighborIter)->iTranslateToAxis,
+	//															Matrix4x4::Mul( (*neighborIter)->iArbitraryRotation,
+	//																			(*neighborIter)->iTranslateToAxisInv ) ) );
+
+	//			// repel the sample points on the sample point Triangle
+	//			ComputeRepulsiveForces(*neighborTriangle, aMainTriangle, edgeRotationMatrix , aForceScale);
+	//		}
+	//	}
+	//}
+	//
+	//neighborIter = neighbors.begin();
+	//for(; neighborIter != neighborIterEnd; neighborIter++)
+	//{
+	//	//pointers to neighboring edge triangles of the current triangle that is being evaluated
+	//	TriangleUseSet* neighborTriangle = (*neighborIter)->iEdgeNeighbor;
+	//	
+	//	if (false == aTriangleMapped[neighborTriangle->GetTriangleId()])
+	//	{
+	//		// mark this triangle as "done". The points on this triangle have repelled the sample points on this triangle
+	//		aTriangleMapped[neighborTriangle->GetTriangleId()] = true;
+
+	//		// the edgeRotationMatrix concatenates the rotation and translation matrices which is used
+	//		// to rotate the neigbors triangle to make it coplanar with the main triangle.
+	//		// The code simply looks like:
+	//		// edgeRotationMatrix = aEdgeRotationMatrix*TranslateToAxisInv*ArbitraryRotation*TranslationToAxis
+	//		Reference<Matrix4x4> edgeRotationMatrix = Matrix4x4::Mul( aEdgeRotationMatrix, 
+	//																	Matrix4x4::Mul( (*neighborIter)->iTranslateToAxis,
+	//																		Matrix4x4::Mul( (*neighborIter)->iArbitraryRotation,
+	//																			(*neighborIter)->iTranslateToAxisInv ) ) );
+	//		MapSamplePointsToPlane(*neighborTriangle, aMainTriangle, edgeRotationMatrix, aTriangleMapped, aForceScale );
+	//	}
+	//}
+
+
+//	while( neighborIter != neighborIterEnd )
+//	{
+//		//pointers to neighboring edge triangles of the current triangle that is being evaluated
+//		TriangleUseSet* neighborTriangle = (*neighborIter)->iEdgeNeighbor;
+//
+//		// if the triangle has already been evaluated,
+//		// then it means that the sample points have already been rotated
+//		// and their repulsive forces have already been computed and stored.
+//		if (false == aTriangleMapped[neighborTriangle->GetTriangleId()])
+//		{	
+//			// if distance between the center of the neighboring triangle and 
+//			//   center of main triangle > radius repelling force
+//			// no need to continue checking neighbors
+//			Vector range = 0;//aMainTriangle.GetCentroid()-neighborTriangle->GetCentroid();
+//			if (range.Length() < iRepulsiveRadius)
+//			{
+//	
+//				// the edgeRotationMatrix concatenates the rotation and translation matrices which is used
+//				// to rotate the neigbors triangle to make it coplanar with the main triangle.
+//				// The code simply looks like:
+//				// edgeRotationMatrix = aEdgeRotationMatrix*TranslateToAxisInv*ArbitraryRotation*TranslationToAxis
+//				Reference<Matrix4x4> edgeRotationMatrix = Matrix4x4::Mul( aEdgeRotationMatrix, 
+//															Matrix4x4::Mul( (*neighborIter)->iTranslateToAxis,
+//																Matrix4x4::Mul( (*neighborIter)->iArbitraryRotation,
+//																		(*neighborIter)->iTranslateToAxisInv ) ) );
+//#ifdef DEBUG_POINTREPULSION
+//				Transform transform = Transform(edgeRotationMatrix, edgeRotationMatrix->Transpose());
+//				Vector mass = Vector( *(*neighborIter)->iP0 );
+//				Normal neighborNormal = neighborTriangle->GetNormal();
+//				Normal testNormal = Normalize( transform( neighborNormal ) );
+//				float testValue = Dot( testNormal, aMainTriangle.GetNormal() );
+//				assert( testValue > 0.9995 );
+//
+//				Point P0 = transform( *((*neighborTriangle).iVertices[0]) );
+//				Point P1 = transform( *((*neighborTriangle).iVertices[1]) );
+//				Point P2 = transform( *((*neighborTriangle).iVertices[2]) );
+//
+//				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P0) );
+//				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P1) );
+//				//assert( PushPointToPlane(aMainTriangle.GetNormal(), *aMainTriangle.iVertices[0], P2) );
+//#endif
+//				// start evaluating the neighbor triangle
+//				MapSamplePointsToPlane(*neighborTriangle, aMainTriangle, edgeRotationMatrix, aTriangleMapped, aForceScale );
+//			}
+//		}
+//
+//		neighborIter++;
+//	}
 }
 
 /*!
@@ -615,9 +698,20 @@ void PointRepulsion::ComputeRepulsiveForces(TriangleUseSet& aEvaluatedTriangle,
 				Transform transform(aEdgeRotationMatrix);
 				Point evaluatedSamplePoint = transform( *((*currentTrianglePointIter)->GetSamplePoint()) );
 
+				Point tempPoint = evaluatedSamplePoint;
+				//PushPointToPlane(aMainTriangle.GetNormal(), mainSamplePoint, tempPoint);
+				//if ( !PointCloseToPlane(aMainTriangle.GetNormal(), mainSamplePoint, tempPoint) )
+				//{
+				//	int i = 0;
+				//}
+
 				// make sure the point is exactly on the plane
 				PushPointToPlane(aMainTriangle.GetNormal(), mainSamplePoint, evaluatedSamplePoint);
 
+				//if (!PointCloseToPlane(aMainTriangle.GetNormal(), mainSamplePoint, evaluatedSamplePoint))
+				//{
+				//	PushPointToPlane(aMainTriangle.GetNormal(), mainSamplePoint, evaluatedSamplePoint);
+				//}
 				// calculate the direction of the force
 				Vector v(mainSamplePoint - evaluatedSamplePoint);
 
@@ -954,12 +1048,24 @@ void PointRepulsion::PushPointToPlane( const Normal& aNormal, const Point& aPoin
 	float c = aNormal.z;
 	float d = -(Dot(aNormal, Vector(aPoint) ));
 
-	float distance = ( abs( a*aTestPoint.x + b*aTestPoint.y + c*aTestPoint.z + d ) ) / ( aNormal.Length() );
+	float distance = ( a*aTestPoint.x + b*aTestPoint.y + c*aTestPoint.z + d ) / ( aNormal.Length() );
 
 
 	if (distance>0.0000001)
 	{
-		Vector invNormal( -aNormal.x, -aNormal.y, -aNormal.z);
+		Vector invNormal;
+		if (distance < 0.0f)
+		{
+			invNormal.x = aNormal.x;
+			invNormal.y = aNormal.y;
+			invNormal.z = aNormal.z;
+		}
+		else
+		{
+			invNormal.x = -aNormal.x;
+			invNormal.y = -aNormal.y;
+			invNormal.z = -aNormal.z;
+		}
 		invNormal *= distance;
 		aTestPoint += invNormal;
 	}
