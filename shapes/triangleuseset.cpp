@@ -40,7 +40,7 @@ TriangleUseSet::~TriangleUseSet()
 }
 
 
-void TriangleUseSet::GetEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const
+void TriangleUseSet::GetEdgeNeighbors( vector<TriangleEdge*>& aNeighbor ) const
 {
 	for (int i=0;i<3;i++)
 	{
@@ -51,7 +51,7 @@ void TriangleUseSet::GetEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const
 	}
 }
 
-void TriangleUseSet::GetAllEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const
+void TriangleUseSet::GetAllEdgeNeighbors( vector<TriangleEdge*>& aNeighbor ) const
 {
 	for (int i=0;i<3;i++)
 	{
@@ -59,7 +59,7 @@ void TriangleUseSet::GetAllEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const
 	}
 }
 
-void TriangleUseSet::AddEdgeNeightbor( Neighbor* aEdgeNeighbor, u_int aPosition )
+void TriangleUseSet::AddEdgeNeightbor( TriangleEdge* aEdgeNeighbor, u_int aPosition )
 {
 	assert(aPosition < 3);
 	iEdgeNeighbors[aPosition] = aEdgeNeighbor;
