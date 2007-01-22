@@ -10,13 +10,13 @@ class Triangle;
 class TriangleUseSet;
 class SamplePointContainer;
 
-struct Neighbor
+struct TriangleEdge
 {
-	Neighbor(TriangleUseSet* aEdgeNeighbor,
-			 Point* aEdgeNeighborsVertex[2],
-			 Reference<Matrix4x4> aArbitraryRotation,
-			 Reference<Matrix4x4> aArbitraryRotationInv,
-			 float aRotationAngle)
+	TriangleEdge(TriangleUseSet* aEdgeNeighbor,
+				 Point* aEdgeNeighborsVertex[2],
+				 Reference<Matrix4x4> aArbitraryRotation,
+				 Reference<Matrix4x4> aArbitraryRotationInv,
+				 float aRotationAngle)
 	: iEdgeNeighbor(aEdgeNeighbor)
 	, iArbitraryRotation(aArbitraryRotation)
 	, iArbitraryRotationInv(aArbitraryRotationInv)
@@ -65,9 +65,9 @@ public:
 	void DeleteSamplePoint(SamplePointContainer* aSamplePoint);
 	float GetArea() const;
 	Normal GetNormal() const;
-	void AddEdgeNeightbor( Neighbor* aEdgeNeighbor, u_int aPosition );
-	void GetEdgeNeighbors(vector<Neighbor*>& aNeighbor) const;
-	void GetAllEdgeNeighbors( vector<Neighbor*>& aNeighbor ) const;
+	void AddEdgeNeightbor( TriangleEdge* aEdgeNeighbor, u_int aPosition );
+	void GetEdgeNeighbors(vector<TriangleEdge*>& aNeighbor) const;
+	void GetAllEdgeNeighbors( vector<TriangleEdge*>& aNeighbor ) const;
 	inline int GetTriangleId();
 	Vector GetCentroid();
 	Reference<Shape> GetTriangle();
@@ -79,7 +79,7 @@ private:
 	static int triangleCounter;
 
 	int iTriangleId;
-	Neighbor* iEdgeNeighbors[3];
+	TriangleEdge* iEdgeNeighbors[3];
 	Vector iCentroid;
 
 	Normal iNormal;
