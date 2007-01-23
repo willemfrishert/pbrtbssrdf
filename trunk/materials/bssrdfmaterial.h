@@ -29,7 +29,7 @@ struct IrradBSSRDFSample
 		fprintf(f, " Pv(%.4f, %.4f, %.4f)", Pv.x, Pv.y, Pv.z);
 	}
 
-	static inline void CheckAverageLocation(IrradBSSRDFSample& sample);
+	static inline void CheckAverageLocation(IrradBSSRDFSample& sample, u_int childLeaves);
 
 	void operator+=(const IrradBSSRDFSample& sample)
 	{
@@ -64,7 +64,7 @@ struct IrradBSSRDFProcess
 
 	Spectrum Lo(float w);
 
-	void evaluate(const Point &P, vector<IrradBSSRDFSample> &samples);
+	void evaluate(const Point &P, vector<IrradBSSRDFSample> &samples, u_int childLeaves);
 
 	/**
 	* @param P
@@ -74,6 +74,10 @@ struct IrradBSSRDFProcess
 	*/
 	bool subdivide(const Point &P, const vector<IrradBSSRDFSample> &samples)
 	{
+		/************************************************************************/
+		/* TODO: CALL CHECK AVERAGE VALUES IN HERE !!!!                         */
+		/************************************************************************/
+
 		// Get the node averaged values
 		float Av = samples[ 0 ].Av;
 		Vector Pv( samples[ 0 ].Pv );
@@ -83,8 +87,12 @@ struct IrradBSSRDFProcess
 		float delta = (x - Pv).LengthSquared();
 		float omega = Av / delta;
 
+		/************************************************************************/
+		/* TODO: UNCOMMENT !!!                                                  */
+		/************************************************************************/
+
 		// check if "voxel is small enough" to subdivide
-		return omega > epsilon;
+		return /*omega > epsilon*/true;
 	}
 
 	/**
@@ -195,7 +203,7 @@ class BSSRDFMaterial : public Material {
 	// methods
 public:
 	// BSSRDF Public Methods
-	BSSRDFMaterial(const Spectrum& sigmaPrimeS, const Spectrum& sigmaA, float eta);
+	BSSRDFMaterial(const Spectrum& aSigmaPrimeS, const Spectrum& aSigmaA, float aEta, float aScaleFactor);
 
 	virtual ~BSSRDFMaterial();
 
@@ -238,26 +246,44 @@ public:
 	 * @description Mean Free Path
 	 */
 	float lu;
+
+	Spectrum sigmaTr;
+	
+	float Fdr;
+	
+	float A;
+	
+	float zv;
+
 };
 
-inline void IrradBSSRDFSample::CheckAverageLocation(IrradBSSRDFSample& sample)
+inline void IrradBSSRDFSample::CheckAverageLocation(IrradBSSRDFSample& sample, u_int childLeaves)
 {
 	if ( ! sample.averaged )
 	{
 		sample.Pv /= sample.Ev.y();
+		if ( childLeaves != 0 )
+		{
+			sample.Ev /= static_cast<float>(childLeaves);
+			sample.Av /= static_cast<float>(childLeaves);
+		}
+		
 		sample.averaged = true;
 	}
 }
 
-void IrradBSSRDFProcess::evaluate(const Point &P, vector<IrradBSSRDFSample> &samples)
+void IrradBSSRDFProcess::evaluate( const Point &P, vector<IrradBSSRDFSample> &samples, u_int childLeaves )
 {
+	//FILE* f;
+	//fopen_s(&f , "evaluate.out", "a");
+	
 	vector<IrradBSSRDFSample>::iterator sampleIt = samples.begin();
 	for (; sampleIt != samples.end(); sampleIt++)
 	{
 		IrradBSSRDFSample& smp = *sampleIt;
 
 		// check if average location has already been computed
-		IrradBSSRDFSample::CheckAverageLocation( smp );
+		IrradBSSRDFSample::CheckAverageLocation(smp, childLeaves);
 
 		//float r = (smp.Pv - P).Length();
 		float rSqr = (smp.Pv - P).LengthSquared();
@@ -277,7 +303,11 @@ void IrradBSSRDFProcess::evaluate(const Point &P, vector<IrradBSSRDFSample> &sam
 		Spectrum Fdt = 1 - Fdr;
 		//printf("Mo: Fdt("); Fdt.Print(stdout); printf(") "); 
 		//printf("E("); smp.Ev.Print(stdout); printf(") ");
-		//printf("Rd("); Rd.Print(stdout); printf(")-- ");
+		//fprintf(f, "dr: %f  dv: %.5f ", dr, dv);
+		//fprintf(f, "zr: %f  zv: %.5f ", zr, zv);
+		//fprintf(f, "Rd("); Rd.Print(f); fprintf(f,") ");
+		//fprintf(f, "Ev("); smp.Ev.Print(f); fprintf(f,") ");
+		//fprintf(f, "Av: %f\n", smp.Av);
 		//printf("C1("); C1.Print(stdout); printf(") -- ");
 		//printf("term2("); term2.Print(stdout); printf(") -- ");
 		//printf("C2("); C2.Print(stdout); printf(") -- ");
@@ -285,13 +315,11 @@ void IrradBSSRDFProcess::evaluate(const Point &P, vector<IrradBSSRDFSample> &sam
 		//printf("MULT("); (C1 * term2 * C2 * term4).Print(stdout); printf(") -- ");
 		
 		Mo += Fdt * Rd * smp.Ev * smp.Av;
-		/************************************************************************/
-		/* TODO: REMOVE THE NEXT LINE. DEBUG ONLY                             */
-		/************************************************************************/
-		int i = 0;
 		//printf("Mo("); Mo.Print(stdout); printf(")\n\n");
 		//printf("*");
 	}
+
+	//fclose( f );
 
 }
 
@@ -299,21 +327,17 @@ IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
 : epsilon( eps )
 , material( material )
 {
-	/************************************************************************/
-	/* TODO: Should I pass these computations to the MAterial???            */
-	/************************************************************************/
 	sigmaA		= this->material->sigmaA;
 	sigmaPrimeT = this->material->sigmaPrimeT;
 	sigmaPrimeS = this->material->sigmaPrimeS;
-	sigmaTr		= (sigmaA * sigmaPrimeT * 3).Sqrt();
+	sigmaTr		= this->material->sigmaTr;
 	
 	lu			= this->material->lu;
 	zr			= this->lu;
 	eta			= this->material->eta;
-	Fdr			= -(1.440f / (eta * eta)) + (0.710f / eta) + 0.668f + 0.0636f * eta;
-	A			= (1 + Fdr) / (1 - Fdr);
-	zv			= this->lu * (1 + 4/3 * A);
-	
+	Fdr			= this->material->Fdr;
+	A			= this->material->A;
+	zv			= this->material->zv;
 }
 
 Spectrum IrradBSSRDFProcess::Lo(float w)
@@ -324,10 +348,16 @@ Spectrum IrradBSSRDFProcess::Lo(float w)
 	// Fresnel transmittance: 1 - Fresnel reflectance
 	Spectrum Ft = -this->material->fresnel->Evaluate(w) + 1;
 
-	Spectrum Lo = /*(Ft / Fdr) * */(Mo / M_PI);
+	//fprintf(f, "Ft: %f, Fdr: %f\n", Ft.y(), Fdr);
+
+	Spectrum Lo = (Ft / Fdr) * (Mo / M_PI);
 
 	//fprintf(f, "Mo("); Mo.Print(f); fprintf(f, ")  ");
-	//fprintf(f, "Lo("); Lo.Print(f); fprintf(f, ")\n");
+	//fprintf(f, "Lo("); Lo.Print(f); fprintf(f, ")");
+	//fprintf(f, "Ft: "); Ft.Print(f); fprintf(f, "\n");
+	//fprintf(f, "(Ft / Fdr): ");
+	//(Ft / Fdr).Print(f);
+	//fprintf(f, "\n");
 
 	//fclose( f );
 
