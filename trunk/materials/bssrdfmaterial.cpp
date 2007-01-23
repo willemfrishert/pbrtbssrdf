@@ -3,14 +3,16 @@
 #include "exoctree.h"
 #include "bssrdfmaterial.h"
 
-BSSRDFMaterial::BSSRDFMaterial( const Spectrum& sigmaPrimeS, const Spectrum& sigmaA, float eta ) : sigmaPrimeS( sigmaPrimeS )
-, sigmaA( sigmaA )
-, eta( eta )
+BSSRDFMaterial::BSSRDFMaterial( const Spectrum& aSigmaPrimeS, const Spectrum& aSigmaA, float aEta, float aScaleFactor ) 
+: sigmaPrimeS( aSigmaPrimeS )
+, sigmaA( aSigmaA )
+, eta( aEta )
 {
-	sigmaPrimeT = sigmaPrimeS + sigmaA;
-	//// the first, etai is the air's index of refraction, and the 
-	//// second one, the material's index of refraction
-	//fresnel = new FresnelDielectric(1.0, eta);
+	sigmaA		*= aScaleFactor;
+	sigmaPrimeS	*= aScaleFactor;
+
+	sigmaPrimeT = (sigmaPrimeS + sigmaA);
+	sigmaTr		= (sigmaA * sigmaPrimeT * 3).Sqrt();
 
 	// the first, etai is the air's index of refraction, and the 
 	// second one, the material's index of refraction
@@ -19,11 +21,21 @@ BSSRDFMaterial::BSSRDFMaterial( const Spectrum& sigmaPrimeS, const Spectrum& sig
 
 	// it's used the Luminance value of the Spectrum to compute the Mean Free Path
 	//float sigmaTrLuminance = sigmaTr.y();
-	//assert( sigmaTrLuminance );
 	float sigmaPrimeTLuminance = sigmaPrimeT.y();
 	assert( sigmaPrimeTLuminance );
 
-	lu	= (1 / sigmaPrimeTLuminance);
+	lu			= (1 / sigmaPrimeTLuminance) * 3.0f;
+
+	Fdr			= -(1.440f / (eta * eta)) + (0.710f / eta) + 0.668f + 0.0636f * eta;
+	A			= (1 + Fdr) / (1 - Fdr);
+	zv			= this->lu * (1 + 4/3 * A);
+
+	printf("\n");
+	printf("sigmaPrimeS: "); sigmaPrimeS.Print(stdout); printf("\n");
+	printf("sigmaA: "); sigmaA.Print(stdout); printf("\n");
+	printf("sigmaPrimeT: "); sigmaPrimeT.Print(stdout); printf("\n");
+	printf("sigmaTR: "); sigmaTr.Print(stdout); printf("\n");
+	printf("lu: %f", lu); printf("\n\n");
 }
 
 BSSRDFMaterial::~BSSRDFMaterial()
@@ -38,7 +50,7 @@ BSDF* BSSRDFMaterial::GetBSDF(const DifferentialGeometry &dgGeom, const Differen
 	dgs = dgShading;
 	BSDF *bsdf = BSDF_ALLOC(BSDF)(dgs, dgGeom.nn);
 
-	float c[3] = {0.8f, 0, 0};
+	float c[3] = {1.0f, 1.0f, 1.0f};
 	Spectrum reflectance( c );
 	MicrofacetDistribution* distribution = new Blinn(1.0f);
 	
@@ -57,6 +69,7 @@ extern "C" DLLEXPORT BSSRDFMaterial * CreateMaterial(const Transform &xform,
 	Spectrum sigmaPrimeS = mp.FindSpectrum("sigmaPrimeS", Spectrum(1.f));
 	Spectrum sigmaA = mp.FindSpectrum("sigmaA", Spectrum(1.f));
 	float eta = mp.FindFloat("eta", 0.f);
+	float scaleFactor = mp.FindFloat("scale", 1.f);
 	
-	return new BSSRDFMaterial(sigmaPrimeS, sigmaA, eta);
+	return new BSSRDFMaterial(sigmaPrimeS, sigmaA, eta, scaleFactor);
 }
