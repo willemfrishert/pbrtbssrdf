@@ -39,7 +39,7 @@ template <class ExNodeData> struct ExOctNode
 template <class ExNodeData, class LookupProc> class ExOctree {
 public:
 	// ExOctree Public Methods
-	ExOctree(const BBox &b, int md = 3)
+	ExOctree(const BBox &b, int md = 6)
 		: bound(b) {
 			maxDepth = md;
 	}
@@ -184,13 +184,13 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 		{
 			// if SO, continue recursion
 			if( (child->childLeaves != 0) && 
-				process.subdivide(p, child->data) )
+				process.subdivide(p, child->data, child->childLeaves) )
 			{
 				lookupPrivate(child, p, process);
 			}
 			else // just evaluate it
 			{
-				process.evaluate(p, node->data);
+				process.evaluate(p, child->data, child->childLeaves);
 			}
 		}
 	}
@@ -204,7 +204,7 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 	/*** ******** MAIN BRANCH ********* ***/
 	if ( node->childLeaves == 0 )
 	{
-		process.evaluate(p, node->data);
+		process.evaluate(p, node->data, 0);
 		return;
 	}
 	
@@ -233,24 +233,26 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 	/*** ******** SECONDARY BRANCHES: for hierarchical evaluation ******** ***/
 	for (int i = 0; i < 8; ++i)
 	{
+		ExOctNode<ExNodeData>* childNode = node->children[ i ];
+
 		// if not the previously followed branch AND it exists
-		if( (i != child) && (node->children[ i ] != NULL) )
+		if( (i != child) && (childNode != NULL) )
 		{
 			// if leaf: evaluate and step to next branch
-			if( node->children[ i ]->childLeaves == 0 )
+			if( childNode->childLeaves == 0 )
 			{
-				process.evaluate(p, node->data);
+				process.evaluate(p, childNode->data, childNode->childLeaves);
 				continue;
 			} 
 
 			// continue subdivision if process allows that 
-			if( process.subdivide(p, node->children[ i ]->data) )
+			if( process.subdivide(p, childNode->data, childNode->childLeaves) )
 			{
-				lookupPrivate(node->children[ i ], p, process);
+				lookupPrivate(childNode, p, process);
 			}
 			else
 			{
-				process.evaluate(p, node->children[ i ]->data);
+				process.evaluate(p, childNode->data, childNode->childLeaves);
 			}
 		}
 	}
@@ -268,7 +270,7 @@ void ExOctree<ExNodeData, LookupProc>::Print(ExOctNode<ExNodeData> *node, FILE *
 		}
 		else
 		{
-			fprintf(f, "N%d\n", child);
+			fprintf(f, "N%d( %d )\n", child, node->childLeaves);
 		}
 		vector<ExNodeData>::iterator dataIt = node->data.begin();
 		for (; dataIt != node->data.end() ;dataIt++)
