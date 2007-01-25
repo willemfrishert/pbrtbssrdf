@@ -108,26 +108,27 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 	int numberOfSamplePoints = pr.SetupSamplePoints( meanFreePath );
 
 	// save initial points
-	fstream outfile("mapped3D.txt", fstream::out);
-	outfile << "1" << endl;
-	outfile << numberOfSamplePoints << endl;
-	outfile.close();
+	//fstream outfile("mapped3D.txt", fstream::out);
+	//outfile << "1" << endl;
+	//outfile << numberOfSamplePoints << endl;
+	//outfile.close();
 
-	pr.FillUniformSamplePointStructure( container );
-	PrintSamplePointsToFile( container, "mapped3D.txt" );
-	container.clear();
+	//pr.FillUniformSamplePointStructure( container );
+	//PrintSamplePointsToFile( container, "mapped3D.txt" );
+	//container.clear();
 
 
 
-	// setup header for turk points
-	outfile.open("turk3D.txt", fstream::out);
-	outfile << iNumberOfIterations << endl;
-	outfile << numberOfSamplePoints << endl;
-	outfile.close();
+	//// setup header for turk points
+	//outfile.open("turk3D.txt", fstream::out);
+	//outfile << iNumberOfIterations << endl;
+	//outfile << numberOfSamplePoints << endl;
+	//outfile.close();
 
 	ostringstream ostr;
 	// relaxation of the random points 
-	for(int k = 0; k<iNumberOfIterations; k++)
+
+	for(int k = 0; k < iNumberOfIterations; k++)
 	{
 		ostr.str("");
 		ostr << "Computing repulsive forces " << k+1 << "/" << iNumberOfIterations;
@@ -136,18 +137,18 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 		ostr << "Computing new point positions " << k+1 << "/" << iNumberOfIterations;
 		pr.ComputeNewPositions( ostr.str() );
 
-		// collect the information
-		pr.FillUniformSamplePointStructure( container );
-		PrintSamplePointsToFile( container, "turk3D.txt" );
-		container.clear();
+	////	//// collect the information
+	////	//pr.FillUniformSamplePointStructure( container );
+	////	//PrintSamplePointsToFile( container, "turk3D.txt" );
+	////	//container.clear();
 
 	}
 	// collect the information
 	pr.FillUniformSamplePointStructure( container );
 
-	pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
+	pointArea = PointRepulsion::CreateTriangleUseSets(triangleList, container, p);
 
-	DebugBreak();
+	pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
 }
 
 
@@ -486,21 +487,8 @@ extern "C" DLLEXPORT Shape *CreateShape(const Transform &o2w, bool reverseOrient
 		}
 	}
 
-	int numberOfIterations = 10;
-	int amount = 0;
-	const int *pIterations = params.FindInt("pointrepulsioniterate", &amount);
-	if (pIterations)
-	{
-		numberOfIterations = pIterations[0];
-	}
-
-	float forceScale = 0.1f;
-	int nForceScale = 0;
-	const float *pForceScale = params.FindFloat("forcescale", &amount);
-	if (pForceScale)
-	{
-		forceScale = pForceScale[0];
-	}
+	int numberOfIterations = params.FindOneInt("pointrepulsioniterate", 5);
+	float forceScale = params.FindOneFloat("forcescale", 0.1f);
 
 	return new TriangleMesh(o2w, reverseOrientation, nvi/3, npi, vi, P,	N,
 							S, uvs, numberOfIterations, forceScale);
