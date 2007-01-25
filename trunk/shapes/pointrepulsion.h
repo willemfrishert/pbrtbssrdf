@@ -17,8 +17,8 @@ public:
 	PointRepulsion(int aNumberOfTriangles, int aNumberOfVertices, int* aVertexIndex, Point* aVertices,vector<Reference<Shape> >& aTriangleList );
 	~PointRepulsion();
 	int SetupSamplePoints( float aMeanFreePath );
-	void ComputeRepulsiveForces( const float& aForceScale );
-	void ComputeNewPositions( int iteration );
+	void ComputeRepulsiveForces( const float& aForceScale, const string& aProcessString);
+	void ComputeNewPositions( const string& aProcessString );
 	void FillUniformSamplePointStructure( vector<UniformPoint>& container );
 	float GetTotalSurfaceArea();
 
@@ -30,7 +30,7 @@ private:
 										 Point& P0, Point& P1, Reference<Matrix4x4>& aArbitraryRotation,
 										 Reference<Matrix4x4>& aArbitraryRotationInv, float& aRotationAngle);
 
-	void ComputeNewPositions(Point& aPPrime, TriangleUseSet* aUseSet, Point* p, SamplePointContainer* container, float& vectorLength);
+	bool ComputeNewPositions(Point& aPPrime, Point* p, SamplePointContainer* container, float& vectorLength);
 	void ComputeSamplePointPosition(vector<float>& aPartialAreaSums, float s, float t);
 	void MapSamplePointsToPlane(list< pair<TriangleUseSet*, Reference<Matrix4x4> > >& aTriangleQueue, TriangleUseSet& aMainTriangle,
 								vector<bool>& aTriangleMapped, const float& aForceScale);
