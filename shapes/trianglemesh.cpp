@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 using namespace std;
 // TriangleMesh Method Definitions
 // ###################### TriangleMesh Method Definitions #############################
@@ -124,14 +125,16 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 	outfile << numberOfSamplePoints << endl;
 	outfile.close();
 
-
-	ProgressReporter progress(iNumberOfIterations, "Applying point repulsion");
+	ostringstream ostr;
 	// relaxation of the random points 
 	for(int k = 0; k<iNumberOfIterations; k++)
 	{
-		pr.ComputeRepulsiveForces( iForceScale );
-		pr.ComputeNewPositions( k );
-		progress.Update();
+		ostr.str("");
+		ostr << "Computing repulsive forces " << k+1 << "/" << iNumberOfIterations;
+		pr.ComputeRepulsiveForces( iForceScale, ostr.str() );
+		ostr.str("");
+		ostr << "Computing new point positions " << k+1 << "/" << iNumberOfIterations;
+		pr.ComputeNewPositions( ostr.str() );
 
 		// collect the information
 		pr.FillUniformSamplePointStructure( container );
@@ -139,11 +142,12 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 		container.clear();
 
 	}
-	progress.Update();
 	// collect the information
 	pr.FillUniformSamplePointStructure( container );
 
 	pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
+
+	DebugBreak();
 }
 
 
@@ -482,7 +486,7 @@ extern "C" DLLEXPORT Shape *CreateShape(const Transform &o2w, bool reverseOrient
 		}
 	}
 
-	int numberOfIterations = 40;
+	int numberOfIterations = 10;
 	int amount = 0;
 	const int *pIterations = params.FindInt("pointrepulsioniterate", &amount);
 	if (pIterations)
@@ -490,7 +494,7 @@ extern "C" DLLEXPORT Shape *CreateShape(const Transform &o2w, bool reverseOrient
 		numberOfIterations = pIterations[0];
 	}
 
-	float forceScale = 0.05f;
+	float forceScale = 0.1f;
 	int nForceScale = 0;
 	const float *pForceScale = params.FindFloat("forcescale", &amount);
 	if (pForceScale)
