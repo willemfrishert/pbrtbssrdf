@@ -6,15 +6,26 @@
 #include <fstream>
 #include <sstream>
 using namespace std;
+
+struct PointDataStorage
+{
+	Point p;
+	Normal n;
+	int triangleId;
+};
+
 // TriangleMesh Method Definitions
 // ###################### TriangleMesh Method Definitions #############################
 TriangleMesh::TriangleMesh( const Transform &o2w, bool ro, int nt, int nv,
 						   const int *vi, const Point *P, const Normal *N,
 						   const Vector *S, const float *uv, 
-						   const int aNumberOfIterations, const float aForceScalar ) 
+						   const int aNumberOfIterations, const float aForceScalar,
+						   const string& aLoadFromFile, const string& aSaveToFile) 
 : Shape(o2w, ro) 
 , iNumberOfIterations(aNumberOfIterations)
 , iForceScale(aForceScalar)
+, iLoadDataFile(aLoadFromFile)
+, iSaveDataFile(aSaveToFile)
 {
 	ntris = nt;
 	nverts = nv;
@@ -97,60 +108,185 @@ void TriangleMesh::Refine(vector<Reference<Shape> > &refined) const
 
 void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
 {
+	fstream outfile;
+	int numberOfSamplePoints;
 	vector<Reference<Shape> > triangleList;	// container for the triangles
 	Refine( triangleList );
 
-	PointRepulsion pr( ntris, nverts, vertexIndex, p, triangleList);
-	
+	bool pointsLoadedFromFile = false;
 
-	// create sample points based on the mean free path and the area of the object.
-	// the area is already computed inside
-	int numberOfSamplePoints = pr.SetupSamplePoints( meanFreePath );
-
-	// save initial points
-	//fstream outfile("mapped3D.txt", fstream::out);
-	//outfile << "1" << endl;
-	//outfile << numberOfSamplePoints << endl;
-	//outfile.close();
-
-	//pr.FillUniformSamplePointStructure( container );
-	//PrintSamplePointsToFile( container, "mapped3D.txt" );
-	//container.clear();
-
-
-
-	//// setup header for turk points
-	//outfile.open("turk3D.txt", fstream::out);
-	//outfile << iNumberOfIterations << endl;
-	//outfile << numberOfSamplePoints << endl;
-	//outfile.close();
-
-	ostringstream ostr;
-	// relaxation of the random points 
-
-	for(int k = 0; k < iNumberOfIterations; k++)
+	if (!iLoadDataFile.empty())
 	{
-		ostr.str("");
-		ostr << "Computing repulsive forces " << k+1 << "/" << iNumberOfIterations;
-		pr.ComputeRepulsiveForces( iForceScale, ostr.str() );
-		ostr.str("");
-		ostr << "Computing new point positions " << k+1 << "/" << iNumberOfIterations;
-		pr.ComputeNewPositions( ostr.str() );
-
-	////	//// collect the information
-	////	//pr.FillUniformSamplePointStructure( container );
-	////	//PrintSamplePointsToFile( container, "turk3D.txt" );
-	////	//container.clear();
-
+		pointsLoadedFromFile = LoadFromFile(triangleList, container, pointArea);
 	}
-	// collect the information
-	pr.FillUniformSamplePointStructure( container );
 
-	pointArea = PointRepulsion::CreateTriangleUseSets(triangleList, container, p);
+	if (!pointsLoadedFromFile)
+	{
+		PointRepulsion pr( ntris, nverts, vertexIndex, p, triangleList);
 
-	pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
+		// create sample points based on the mean free path and the area of the object.
+		// the area is already computed inside
+		numberOfSamplePoints = pr.SetupSamplePoints( meanFreePath );
+
+#ifdef POINTREPULSION_PRINTASCII
+		// save initial points
+		pr.FillUniformSamplePointStructure( container );
+
+		outfile.open("mapped3D.txt", fstream::out);
+		outfile << "1" << endl;
+		outfile << numberOfSamplePoints << endl;
+		outfile.close();
+		PrintSamplePointsToFile( container, "mapped3D.txt" );
+
+		container.clear();
+
+
+		// setup header for turk points
+		outfile.open("turk3D.txt", fstream::out);
+		outfile << iNumberOfIterations-1 << endl;
+		outfile << numberOfSamplePoints << endl;
+		outfile.close();
+#endif
+
+		ostringstream ostr;
+		// relaxation of the random points 
+
+		for(int k = 0; k < iNumberOfIterations; k++)
+		{
+			ostr.str("");
+			ostr << "Computing repulsive forces " << k+1 << "/" << iNumberOfIterations;
+			pr.ComputeRepulsiveForces( iForceScale, ostr.str() );
+			ostr.str("");
+			ostr << "Computing new point positions " << k+1 << "/" << iNumberOfIterations;
+			pr.ComputeNewPositions( ostr.str() );
+
+#ifdef POINTREPULSION_PRINTASCII
+			// collect the information
+			pr.FillUniformSamplePointStructure( container );
+			PrintSamplePointsToFile( container, "turk3D.txt" );
+			container.clear();
+#endif
+
+		}
+		// collect the information
+		pr.FillUniformSamplePointStructure( container );
+//		pointArea = PointRepulsion::CreateTriangleUseSets(triangleList, container, p);
+		pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
+	}
+
+	if (!iSaveDataFile.empty())
+	{
+		SaveSamplePoints(container, pointArea);
+	}
+
+#ifdef POINTREPULSION_PRINTASCII
+	// setup header for turk points
+	outfile.open("final3D.txt", fstream::out);
+	outfile << "1" << endl;
+	outfile << container.size() << endl;
+	outfile.close();
+	PrintSamplePointsToFile( container, "final3D.txt" );
+#endif
 }
 
+bool TriangleMesh::LoadFromFile(vector<Reference<Shape> > aTriangleList, vector<UniformPoint>& aContainer, float& aPointArea) const
+{
+	fstream in;
+	
+	bool fileStatus = true;
+
+	in.open(iLoadDataFile.c_str(), fstream::in | fstream::binary);
+
+	unsigned int size = 0;
+	PointDataStorage* data = NULL;
+
+	if (in.is_open())
+	{
+		in.read( (char *)(&aPointArea), sizeof(float) );
+		in.read( (char *)(&size), sizeof(unsigned int) );		
+
+
+		data = new PointDataStorage[size];
+		in.read( reinterpret_cast<char *>(data), sizeof(PointDataStorage)*size );
+		in.close();
+
+		ProgressReporter progress( size, "Reading sample points from disk");
+		for (unsigned int i = 0; i < size; i++)	
+		{
+			UniformPoint up;
+			up.p = ObjectToWorld(data[i].p);
+			up.n = ObjectToWorld(data[i].n);
+			up.triangle = aTriangleList.at(data[i].triangleId);
+
+			aContainer.push_back(up);
+			progress.Update();
+		}
+
+		progress.Done();
+		if (data != NULL)
+		{
+			delete data;
+		}
+	}
+	else
+	{
+		printf("Unable to load sample points from file: %s\n", iLoadDataFile.c_str());
+		fileStatus = false;
+	}
+
+	return fileStatus;
+}
+
+void TriangleMesh::SaveSamplePoints( const vector<UniformPoint>& aContainer, const float& aPointArea ) const
+{
+	fstream out;
+	out.open(iSaveDataFile.c_str(), fstream::out | fstream::binary);
+	
+	if (out.is_open())
+	{
+		unsigned int size = aContainer.size();
+		ProgressReporter progress(size, "Writing sample points to disk");
+
+		Reference<Triangle> triangle;
+		PointDataStorage *data = new PointDataStorage[size];
+		for(unsigned int i = 0;i < size;i++)
+		{
+			UniformPoint up = aContainer.at(i);
+			triangle = TriangleMesh::Cast(up.triangle);
+			data[i].p = up.p;
+			data[i].n = up.n;
+			data[i].triangleId = triangle->Id();
+
+			progress.Update();
+		}
+
+		out.write( (char *)(&aPointArea), sizeof(float) );
+		out.write( (char *)(&size), sizeof(unsigned int) );
+		out.write( reinterpret_cast<char *>(data), sizeof(PointDataStorage)*size );
+		out.close();
+
+		progress.Done();
+		delete[] data;
+	}
+	else
+	{
+		printf("Unable to save sample points to file: %s\n", iSaveDataFile.c_str());
+	}
+
+}
+
+/**
+* @description ugly function that does a dynamic cast on an object. 
+* Hammer method used at full strength ;) in PBRT
+*
+* @param aTriangle
+* @return the object or NULL if is not of the return type
+*/
+inline Triangle* TriangleMesh::Cast(Reference<Shape>& aTriangle)
+{
+	Shape* triangle = aTriangle.operator ->();
+	return dynamic_cast<Triangle*> (triangle);
+}
 
 void TriangleMesh::PrintSamplePointsToFile( vector<UniformPoint>& container, string aFileName ) const
 {
@@ -490,6 +626,9 @@ extern "C" DLLEXPORT Shape *CreateShape(const Transform &o2w, bool reverseOrient
 	int numberOfIterations = params.FindOneInt("pointrepulsioniterate", 5);
 	float forceScale = params.FindOneFloat("forcescale", 0.1f);
 
+	string loadSamplesFromFile = params.FindOneString("loadsamplefile", "");
+	string saveSamplesToFile = params.FindOneString("savesamplefile", "");
+
 	return new TriangleMesh(o2w, reverseOrientation, nvi/3, npi, vi, P,	N,
-							S, uvs, numberOfIterations, forceScale);
+							S, uvs, numberOfIterations, forceScale, loadSamplesFromFile, saveSamplesToFile);
 }
