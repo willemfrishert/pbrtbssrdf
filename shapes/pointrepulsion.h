@@ -21,6 +21,9 @@ public:
 	void ComputeNewPositions( const string& aProcessString );
 	void FillUniformSamplePointStructure( vector<UniformPoint>& container );
 	float GetTotalSurfaceArea();
+	static float CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleList, vector<UniformPoint>& aSamplePoints, 
+		Point* iVertices);
+
 private:
 	void SetupTriangleUseSets(vector<Reference<Shape> >& aTriangleList);
 	void CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleList);

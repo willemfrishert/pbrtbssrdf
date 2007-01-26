@@ -83,6 +83,51 @@ void PointRepulsion::CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleL
 	progress.Done();
 }
 
+/**
+ * @param aTriangleList
+ * @param aSamplePoints
+ * @param iVertices
+ * @return 
+ */
+float PointRepulsion::CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleList, 
+										  vector<UniformPoint>& aSamplePoints, Point* iVertices)
+{
+	int numberOfTriangles = aTriangleList.size();
+
+	ProgressReporter progress(numberOfTriangles, "Creating Triangle Usesets");
+	int* vertices = NULL;
+	float totalArea = 0.0f;
+
+	//set up all the triangle use sets
+	for (int i = 0; i < numberOfTriangles; i++)
+	{
+		Triangle* triangle = TriangleMesh::Cast(aTriangleList.at(i));
+		triangle->GetVertexIndices( &vertices );
+
+		TriangleUseSet triangleUseSet( aTriangleList.at(i), (iVertices+vertices[0]), 
+			(iVertices+vertices[1]), (iVertices+vertices[2]) );
+
+		for (int p = 0; p < 3; p++)
+		{
+			UniformPoint samplePoint;
+			samplePoint.p = *(iVertices + vertices[ p ]);
+			samplePoint.n = triangleUseSet.GetNormal();
+			samplePoint.triangle = aTriangleList.at(i);
+
+			aSamplePoints.push_back( samplePoint );
+		}
+
+
+		// calculate the total surface area;
+		totalArea += triangleUseSet.GetArea();
+
+		progress.Update();
+	}
+	progress.Done();
+
+	return totalArea / (static_cast<float>(numberOfTriangles) * 3.0f);
+}
+
 void PointRepulsion::LinkTriangleUseSets()
 {
 	ProgressReporter progress(iNumberOfTriangles, "Linking Triangle Usesets");
@@ -314,16 +359,17 @@ int PointRepulsion::SetupSamplePoints( float aMeanFreePath )
 	//samplePointContainer = new SamplePointContainer( samplePoint, &iTriangles.at(4) );
 	//this->iSamplePointContainer.push_back( samplePointContainer );
 
+
 #ifdef POINTREPULSION_PRINTASCII
 	fstream outfile("stratified2D.txt", fstream::out);
 	outfile << "1" << endl;
 	outfile << iNumberOfSamplePoints << endl;
 
-	for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
-	{
-		outfile << samples[i] << " " << samples[i+1] << " " << 0.0 << " ";
-	}
-	outfile.close();
+	//for (int i=0; i<iNumberOfSamplePoints*2; i+=2)
+	//{
+	//	outfile << samples[i] << " " << samples[i+1] << " " << 0.0 << " ";
+	//}
+	//outfile.close();
 #endif
 	//vector<Point3d> points;
 	//ParseFile( "stratified2D.txt", points );
