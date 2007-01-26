@@ -12,6 +12,7 @@
 #include "core/sampling.h"
 
 class PointRepulsion;
+class Triangle;
 
 
 // ###################### TriangleMesh class #############################
@@ -19,7 +20,7 @@ class TriangleMesh : public Shape
 {
 public:
 	// TriangleMesh Public Methods
-	TriangleMesh(const Transform &o2w, bool ro, int ntris, int nverts, const int *vptr, const Point *P, const Normal *N, const Vector *S, const float *uv, const int aNumberOfIterations, const float aForceScalar);
+	TriangleMesh(const Transform &o2w, bool ro, int ntris, int nverts, const int *vptr, const Point *P, const Normal *N, const Vector *S, const float *uv, const int aNumberOfIterations, const float aForceScalar, const string& aLoadFromFile, const string& aSaveToFile);
 	~TriangleMesh();
 
 	//	virtual void GetUniformPointSamples(vector<Point>& container) const;
@@ -31,7 +32,9 @@ public:
 
 	void Refine(vector<Reference<Shape> > &refined) const;
 
-
+	static Triangle* Cast(Reference<Shape>& aTriangle);
+	void SaveSamplePoints(const vector<UniformPoint>& aContainer, const float& aPointArea) const;
+	bool LoadFromFile(vector<Reference<Shape> > aTriangleList, vector<UniformPoint>& aContainer, float& aPointArea) const;
 	void PrintSamplePointsToFile( vector<UniformPoint>& container, string aFileName ) const;
 
 
@@ -48,8 +51,10 @@ protected:
 	Vector *s;
 	float *uvs;
 
-	int iNumberOfIterations; // Number of iterations the point repulsion algorithm will take
-	float iForceScale;         // Scalar number
+	int iNumberOfIterations;  // Number of iterations the point repulsion algorithm will take
+	float iForceScale;		  // Scalar number
+	string iLoadDataFile;	  // file to load sample points, normals and triangles from
+	string iSaveDataFile;	  // file to save computed samplepoints, normals and triangles to
 };
 
 // ###################### Triangle class #############################
@@ -60,6 +65,7 @@ public:
 	// Triangle Public Methods
 	Triangle(const Transform &o2w, bool ro, TriangleMesh *m, int n)
 		: Shape(o2w, ro) 
+		, iID(n)
 	{
 		mesh = m;
 		v = &mesh->vertexIndex[3*n];
@@ -78,6 +84,11 @@ public:
 	void GetUVs(float uv[3][2]) const;
 
 	float Area() const;
+	
+	int Id() const
+	{
+		return iID;
+	}
 
 	virtual void GetDifferentialGeometry(const Point& p, DifferentialGeometry *dg);
 
@@ -213,4 +224,5 @@ private:
 	// Triangle Data
 	Reference<TriangleMesh> mesh;
 	int *v;
+	int iID;
 };
