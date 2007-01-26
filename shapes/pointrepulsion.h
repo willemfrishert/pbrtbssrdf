@@ -21,7 +21,6 @@ public:
 	void ComputeNewPositions( const string& aProcessString );
 	void FillUniformSamplePointStructure( vector<UniformPoint>& container );
 	float GetTotalSurfaceArea();
-
 private:
 	void SetupTriangleUseSets(vector<Reference<Shape> >& aTriangleList);
 	void CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleList);
@@ -30,7 +29,7 @@ private:
 										 Point& P0, Point& P1, Reference<Matrix4x4>& aArbitraryRotation,
 										 Reference<Matrix4x4>& aArbitraryRotationInv, float& aRotationAngle);
 
-	bool ComputeNewPositions(Point& aPPrime, Point* p, SamplePointContainer* container, float& vectorLength);
+	bool ComputeNewPositions(Point& aPPrime, Point* p, SamplePointContainer* container);
 	void ComputeSamplePointPosition(vector<float>& aPartialAreaSums, float s, float t);
 	void MapSamplePointsToPlane(list< pair<TriangleUseSet*, Reference<Matrix4x4> > >& aTriangleQueue, TriangleUseSet& aMainTriangle,
 								vector<bool>& aTriangleMapped, const float& aForceScale);
@@ -47,7 +46,6 @@ private:
 	int SearchForTriangle(const float aS, const vector<float>& aAreas, int lower, int upper );
 	void PushPointToPlane(const Normal& aNormal, const Point& aPoint, Point& aTestPoint );
 	bool PointCloseToPlane( const Normal& aNormal, const Point& aPoint, Point& aTestPoint );
-	static Triangle* Cast(Reference<Shape>& aTriangle);
 	float ComputeSmallestDistanceBetweenTriangles(TriangleUseSet& aEvaluatedTriangle, TriangleUseSet& aMainTriangle, Transform& aTransform);
 
 	int iNumberOfTriangles;
