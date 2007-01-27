@@ -11,7 +11,7 @@ public:
 	// BSSRDFIntegrator Public Methods
 	BSSRDFIntegrator(int ncaus, int ndir, int nindir, int nLookup, int mdepth,
 		float maxdist, bool finalGather, int gatherSamples,
-		bool directWithPhotons);
+		bool directWithPhotons, int lightSamples, float epsilon);
 
 	~BSSRDFIntegrator();
 
@@ -57,6 +57,8 @@ private:
 
 	void GenerateStratifiedSamples();
 
+	virtual void Postprocess(const Scene *scene);
+
 	// BSSRDFIntegrator Private Data
 	u_int nCausticPhotons, nIndirectPhotons, nDirectPhotons;
 	u_int nLookup;
@@ -79,8 +81,14 @@ private:
 	// so I can use it on the Preprocess
 	Sample* mSample;
 
-	///************************************************************************/
-	///* OUR NEW STUFF                                                        */
-	///************************************************************************/
-	//mutable ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>* bssrdfIrradianceValues;
+	/**
+	 * @description number of samples used to estimate 
+	 * direct lighting for irradiance caching
+	 */
+	int lightSamples;
+
+	/**
+	 * @description maximum solid angle spanned by the points in a voxel
+	 */
+	float epsilon;
 };
