@@ -70,6 +70,7 @@ void Scene::Render() {
 	}
 	// Clean up after rendering and store final image
 	delete sample;
+	surfaceIntegrator->Postprocess(this);
 	progress.Done();
 	camera->film->WriteImage();
 }
