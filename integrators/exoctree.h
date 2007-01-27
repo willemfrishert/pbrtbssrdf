@@ -39,7 +39,7 @@ template <class ExNodeData> struct ExOctNode
 template <class ExNodeData, class LookupProc> class ExOctree {
 public:
 	// ExOctree Public Methods
-	ExOctree(const BBox &b, int md = 6)
+	ExOctree(const BBox &b, int md = 5)
 		: bound(b) {
 			maxDepth = md;
 	}
@@ -177,6 +177,7 @@ template <class ExNodeData, class LookupProc>
 void ExOctree<ExNodeData, LookupProc>::lookupPrivate( 
 	ExOctNode<ExNodeData> *node, const Point &p, LookupProc &process) 
 {
+	//printf("*");
 	for (int i = 0; i < 8; i++)
 	{
 		ExOctNode<ExNodeData>* child = node->children[ i ];
@@ -192,6 +193,7 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 			{
 				process.evaluate(p, child->data, child->childLeaves);
 			}
+			//printf("\n");
 		}
 	}
 }
@@ -249,6 +251,7 @@ void ExOctree<ExNodeData, LookupProc>::lookupPrivate(
 			if( process.subdivide(p, childNode->data, childNode->childLeaves) )
 			{
 				lookupPrivate(childNode, p, process);
+				//printf("\n");
 			}
 			else
 			{
@@ -304,7 +307,7 @@ void ExOctree<ExNodeData, LookupProc>::Print(ExOctNode<ExNodeData> *node, FILE *
 				// indent child
 				for (int l = 0; l < level; l++)
 				{
-					fprintf(f, "---");
+					fprintf(f, "%d--", level);
 				}
 
 				Print(node->children[ i ], f, i, level);
