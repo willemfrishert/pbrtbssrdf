@@ -9,6 +9,15 @@
 #include <fstream>
 using namespace std;
 
+struct Point3d 
+{
+	Point3d(float x, float y, float z):
+	x(x), y(y), z(z) {}
+	float x;
+	float y;
+	float z;
+};
+
 
 GLdouble angle;
 GLdouble wobble;
@@ -23,19 +32,18 @@ int yCenter = 0;
 bool initpoints = true;
 bool repelpoints = true;
 bool endpoints = true;
+
 float numberOfIterations;
 float numberOfSamples;
+float numberOfForcePoints;
+
+vector<Point3d> stratifiedPoints;
+vector<Point3d> initialPoints;
+vector<Point3d> endPoints;
+vector<Point3d> turkPoints;
 
 #define M_ROTATE_XY     1
 
-struct Point3d 
-{
-	Point3d(float x, float y, float z):
-		x(x), y(y), z(z) {}
-	float x;
-	float y;
-	float z;
-};
 
 void ParseFile( string fileName, vector<Point3d>& iPoints, bool storeMetaData )
 {
@@ -50,6 +58,7 @@ void ParseFile( string fileName, vector<Point3d>& iPoints, bool storeMetaData )
 	{
 		numberOfIterations = nrOfIterations;
 		numberOfSamples = nrOfSamples;
+		numberOfForcePoints = numberOfIterations*numberOfSamples;
 	}
 
 	while(!input.eof())
@@ -64,74 +73,50 @@ void ParseFile( string fileName, vector<Point3d>& iPoints, bool storeMetaData )
 	input.close();
 }
 
-vector<Point3d> stratifiedPoints;
-vector<Point3d> initialPoints;
-vector<Point3d> turkPoints;
-
 void displayVec(vector<Point3d>& points)
 {
-	vector<Point3d>::iterator it;
-
+	glPushMatrix();
+	glTranslatef(0.0, -1.5, 0.0);
 	if (initpoints)
 	{
-		it = initialPoints.begin();
-
 		glColor3f(1, 0, 0);
-		glPushMatrix();
-		glTranslatef(-0.75, -0.75, 0.75);
-		glBegin(GL_POINTS);
-		for (;it != initialPoints.end(); it++)
-		{
-			Point3d p = *it;
-			glVertex3f(p.x, p.y, p.z);
-		}
-		glEnd();
-		glPopMatrix();
 
-	}
-
-
-	glColor3f(0, 0, 1);
-	glPushMatrix();
-	glTranslatef(-0.75, -0.75, 0.75);
-	glBegin(GL_POINTS);
-	it = turkPoints.begin();
-
-	for (int i =0 ; it != turkPoints.end(); it++, i++)
-	{
-		Point3d p = *it;
-		if (endpoints)
-		{
-			if (i >= ((numberOfIterations-1)*numberOfSamples))
-			{
-				glColor3f(0,1,0);
-				glVertex3f(p.x, p.y, p.z);
-			}
-		}
-		if (repelpoints)
-		{
-			glVertex3f(p.x, p.y, p.z);
-		}
-
-	}
-	glEnd();
-	glPopMatrix();
+		glEnableClientState( GL_VERTEX_ARRAY );
+		glVertexPointer( 3, GL_FLOAT, 0, &initialPoints[0].x );
+		glDrawArrays(GL_POINTS, 0, numberOfSamples);
 	
+		glDisableClientState( GL_VERTEX_ARRAY );
+	}
 
+	if (repelpoints)
+	{
+		glColor3f(0, 0, 1);
+		glPushMatrix();
+		glEnableClientState( GL_VERTEX_ARRAY );
+		glVertexPointer( 3, GL_FLOAT, 0, &turkPoints[0].x );
+		glDrawArrays(GL_POINTS, 0, numberOfForcePoints);
+	
+		glDisableClientState( GL_VERTEX_ARRAY );
+	}
 
-	glColor3f(1,1,1);
-	glutWireCube( 1.5 );
-
-	glColor3f(0,0,0);
-	glutSolidCube( 1.499 );
-
+	if (endpoints)
+	{
+		glColor3f(0, 1, 0);
+		glPushMatrix();
+		glEnableClientState( GL_VERTEX_ARRAY );
+		glVertexPointer( 3, GL_FLOAT, 0, &endPoints[0].x );
+		glDrawArrays(GL_POINTS, 0, numberOfSamples);
+	
+		glDisableClientState( GL_VERTEX_ARRAY );
+	}
+	glPopMatrix();
 }
 
 void init() {
 	//glEnable(GL_LIGHTING);
 	//glEnable(GL_LIGHT0);
 	glEnable(GL_DEPTH_TEST);
-	glPointSize(3.0);
+	glPointSize(2.0);
 	glColor3f(1, 0, 0);
 
 	glClearColor(0, 0, 0, 0);
@@ -147,42 +132,27 @@ void display(void) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 	glPushMatrix();
-	glTranslatef(-0.3, 0, -3.3);
+	glTranslatef(0.0, 0, -5.0);
 
-	glPushMatrix();
-	/* "World" rotation, controlled by mouse */
-	glRotatef(xRot, 1, 0, 0);
-	glRotatef(yRot, 0, 1, 0);
+		glPushMatrix();
+			/* "World" rotation, controlled by mouse */
+			glRotatef(xRot, 1, 0, 0);
+			glRotatef(yRot, 0, 1, 0);
 
-	displayVec( initialPoints );
+			displayVec( initialPoints );
+
+		glPopMatrix();
 
 	glPopMatrix();
-	glPopMatrix();
 
-	glPushMatrix();
-	glTranslatef(0, 0, -4);
-	glColor3f(1, 0, 0);
-	glTranslatef(0.75, -0.5, 1.0);
-	glBegin(GL_POINTS);
-
-	vector<Point3d>::iterator it = stratifiedPoints.begin();
-	for (; it != stratifiedPoints.end(); it++)
-	{
-		Point3d p = *it;
-		glVertex3f(p.x, p.y, p.z);
-	}
-	glEnd();
-
-	glColor3f(1, 1, 1);
-	glBegin(GL_LINE_LOOP);
-	glVertex3f(0,0,0);
-	glVertex3f(1.0,0,0);
-	glVertex3f(1.0,1.0,0);
-	glVertex3f(0,1.0,0);
+	glColor3f(0, 0, 0);
+	glBegin(GL_QUADS);
+	glVertex3f(-3,-3,0);
+	glVertex3f(3,-3,0);
+	glVertex3f(3,3,0);
+	glVertex3f(-3,3,0);
 	glEnd();
 	glPopMatrix();
-
-//	glutSolidCube(1.0);
 
 	glutSwapBuffers();
 }
@@ -234,15 +204,13 @@ void motion(int x, int y) {
 	}
 }
 
-int main(int argc, char **argv) {
-
-	//points.push_back( Point3d(0, 0, 0) );
-	//points.push_back( Point3d(0, 1, 0) );
-	//points.push_back( Point3d(1, 0, 0) );
+int main(int argc, char **argv) 
+{
 
 	ParseFile("../../scenes/stratified2D.txt", stratifiedPoints, false);
 	ParseFile("../../scenes/mapped3D.txt", initialPoints, false );
 	ParseFile("../../scenes/turk3D.txt", turkPoints, true );
+	ParseFile("../../scenes/final3D.txt", endPoints, false );
 	
 
 	glutInit(&argc, argv);
