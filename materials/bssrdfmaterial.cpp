@@ -3,13 +3,15 @@
 #include "exoctree.h"
 #include "bssrdfmaterial.h"
 
-BSSRDFMaterial::BSSRDFMaterial( const Spectrum& aSigmaPrimeS, const Spectrum& aSigmaA, float aEta, float aScaleFactor ) 
+BSSRDFMaterial::BSSRDFMaterial( const Spectrum& aSigmaPrimeS, const Spectrum& aSigmaA, 
+							   float aEta, float aScaleFactor, const Spectrum& diffuse  ) 
 : sigmaPrimeS( aSigmaPrimeS )
 , sigmaA( aSigmaA )
 , eta( aEta )
+, diffuse( diffuse )
 {
-	sigmaA		*= aScaleFactor;
-	sigmaPrimeS	*= aScaleFactor;
+	//sigmaA		*= aScaleFactor;
+	//sigmaPrimeS	*= aScaleFactor;
 
 	sigmaPrimeT = (sigmaPrimeS + sigmaA);
 	sigmaTr		= (sigmaA * sigmaPrimeT * 3).Sqrt();
@@ -21,10 +23,13 @@ BSSRDFMaterial::BSSRDFMaterial( const Spectrum& aSigmaPrimeS, const Spectrum& aS
 
 	// it's used the Luminance value of the Spectrum to compute the Mean Free Path
 	//float sigmaTrLuminance = sigmaTr.y();
-	float sigmaPrimeTLuminance = sigmaPrimeT.y();
-	assert( sigmaPrimeTLuminance );
+	//float sigmaPrimeTLuminance = sigmaPrimeT.y();
+	//assert( sigmaPrimeTLuminance );
 
-	lu			= (1 / sigmaPrimeTLuminance) * 3.0f;
+	lu			= Spectrum(1.0f);
+	lu			= (lu / sigmaPrimeT);
+
+	lu *= aScaleFactor;
 
 	Fdr			= -(1.440f / (eta * eta)) + (0.710f / eta) + 0.668f + 0.0636f * eta;
 	A			= (1 + Fdr) / (1 - Fdr);
@@ -35,7 +40,7 @@ BSSRDFMaterial::BSSRDFMaterial( const Spectrum& aSigmaPrimeS, const Spectrum& aS
 	printf("sigmaA: "); sigmaA.Print(stdout); printf("\n");
 	printf("sigmaPrimeT: "); sigmaPrimeT.Print(stdout); printf("\n");
 	printf("sigmaTR: "); sigmaTr.Print(stdout); printf("\n");
-	printf("lu: %f", lu); printf("\n\n");
+	printf("lu: "); lu.Print(stdout); printf("\n\n");
 }
 
 BSSRDFMaterial::~BSSRDFMaterial()
@@ -50,15 +55,11 @@ BSDF* BSSRDFMaterial::GetBSDF(const DifferentialGeometry &dgGeom, const Differen
 	dgs = dgShading;
 	BSDF *bsdf = BSDF_ALLOC(BSDF)(dgs, dgGeom.nn);
 
-	float c[3] = {1.0f, 1.0f, 1.0f};
-	Spectrum reflectance( c );
-	MicrofacetDistribution* distribution = new Blinn(1.0f);
-	
 	// only add a SpecularReflection BSDF, the transmission is already 
 	// contemplated on our implementation, right? :P
-	//bsdf->Add(BSDF_ALLOC(SpecularReflection)(Spectrum(0.5f), fresnel));
+	//bsdf->Add(BSDF_ALLOC(SpecularReflection)(Spectrum(1.0f), fresnel));
 	//bsdf->Add(BSDF_ALLOC(Microfacet(reflectance, fresnel, distribution)));
-	bsdf->Add(BSDF_ALLOC(Lambertian)(reflectance));
+	bsdf->Add(BSDF_ALLOC(Lambertian)( this->diffuse ));
 
 	return bsdf;
 }
@@ -66,10 +67,11 @@ BSDF* BSSRDFMaterial::GetBSDF(const DifferentialGeometry &dgGeom, const Differen
 extern "C" DLLEXPORT BSSRDFMaterial * CreateMaterial(const Transform &xform,
 											   const TextureParams &mp) 
 {
+	Spectrum diffuse = mp.FindSpectrum("diffuse", Spectrum(1.f));
 	Spectrum sigmaPrimeS = mp.FindSpectrum("sigmaPrimeS", Spectrum(1.f));
 	Spectrum sigmaA = mp.FindSpectrum("sigmaA", Spectrum(1.f));
 	float eta = mp.FindFloat("eta", 0.f);
 	float scaleFactor = mp.FindFloat("scale", 1.f);
 	
-	return new BSSRDFMaterial(sigmaPrimeS, sigmaA, eta, scaleFactor);
+	return new BSSRDFMaterial(sigmaPrimeS, sigmaA, eta, scaleFactor, diffuse);
 }

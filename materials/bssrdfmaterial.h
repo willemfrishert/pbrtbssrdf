@@ -27,6 +27,7 @@ struct IrradBSSRDFSample
 	{
 		fprintf(f, "Ev("); Ev.Print( f ); fprintf(f, ")"); 
 		fprintf(f, " Pv(%.4f, %.4f, %.4f)", Pv.x, Pv.y, Pv.z);
+		fprintf(f, " Av: %f", Av);
 	}
 
 	static inline void CheckAverageLocation(IrradBSSRDFSample& sample, u_int childLeaves);
@@ -60,7 +61,7 @@ struct IrradBSSRDFSample
 struct IrradBSSRDFProcess
 {
 	// IrradBSSRDFProcess Public Methods
-	IrradBSSRDFProcess(BSSRDFMaterial* material, float eps = 0.0001f);
+	IrradBSSRDFProcess(BSSRDFMaterial* material, float eps);
 
 	Spectrum Lo(float w);
 
@@ -72,27 +73,23 @@ struct IrradBSSRDFProcess
 	* @param childData
 	* @return true if the voxel should be subdivided, i.e., the lookup recursion should continue
 	*/
-	bool subdivide(const Point &P, const vector<IrradBSSRDFSample> &samples)
+	bool subdivide(const Point &P, vector<IrradBSSRDFSample> &samples, u_int childLeaves)
 	{
-		/************************************************************************/
-		/* TODO: CALL CHECK AVERAGE VALUES IN HERE !!!!                         */
-		/************************************************************************/
+		IrradBSSRDFSample::CheckAverageLocation(samples[ 0 ], childLeaves);
 
 		// Get the node averaged values
 		float Av = samples[ 0 ].Av;
-		Vector Pv( samples[ 0 ].Pv );
+		//Vector Pv( samples[ 0 ].Pv );
 
 		// As described on the paper: deltaW = Av / ||x - Pv||^2
-		Vector x( P );
-		float delta = (x - Pv).LengthSquared();
+		//Vector x( P );
+		float delta = (P - samples[ 0 ].Pv).LengthSquared();
 		float omega = Av / delta;
 
-		/************************************************************************/
-		/* TODO: UNCOMMENT !!!                                                  */
-		/************************************************************************/
+		//printf("%f\t\t", omega);
 
 		// check if "voxel is small enough" to subdivide
-		return /*omega > epsilon*/true;
+		return omega > epsilon;
 	}
 
 	/**
@@ -156,7 +153,7 @@ struct IrradBSSRDFProcess
 	/**
 	 * @description Mean Free Path
 	 */
-	float lu;
+	Spectrum lu;
 
 	/**
 	 * @description Relative Index of Refraction
@@ -166,12 +163,12 @@ struct IrradBSSRDFProcess
 	/**
 	 * @description Distance to the real dipole light source
 	 */
-	float zr;
+	Spectrum zr;
 
 	/**
 	 * @description Distance to the virtual dipole light source
 	 */
-	float zv;
+	Spectrum zv;
 
 	/**
 	 * @description Diffuse Fresnel term
@@ -203,7 +200,8 @@ class BSSRDFMaterial : public Material {
 	// methods
 public:
 	// BSSRDF Public Methods
-	BSSRDFMaterial(const Spectrum& aSigmaPrimeS, const Spectrum& aSigmaA, float aEta, float aScaleFactor);
+	BSSRDFMaterial(const Spectrum& aSigmaPrimeS, const Spectrum& aSigmaA, 
+		float aEta, float aScaleFactor, const Spectrum& diffuse );
 
 	virtual ~BSSRDFMaterial();
 
@@ -245,28 +243,55 @@ public:
 	/**
 	 * @description Mean Free Path
 	 */
-	float lu;
+	Spectrum lu;
 
+	/**
+	 * Default value
+	 * Variable comment
+	 */
 	Spectrum sigmaTr;
 	
+	/**
+	 * Default value
+	 * Variable comment
+	 */
 	float Fdr;
 	
+	/**
+	 * Default value
+	 * Variable comment
+	 */
 	float A;
 	
-	float zv;
+	/**
+	 * Default value
+	 * Variable comment
+	 */
+	Spectrum zv;
+
+	/**
+	 * Default value
+	 * Variable comment
+	 */
+	Spectrum diffuse;
 
 };
 
 inline void IrradBSSRDFSample::CheckAverageLocation(IrradBSSRDFSample& sample, u_int childLeaves)
 {
+	// if leaf, it will never come into this: average already true
 	if ( ! sample.averaged )
 	{
-		sample.Pv /= sample.Ev.y();
-		if ( childLeaves != 0 )
+		if( ! sample.Ev.Black() )
 		{
-			sample.Ev /= static_cast<float>(childLeaves);
-			sample.Av /= static_cast<float>(childLeaves);
+			sample.Pv /= sample.Ev.y();
 		}
+		
+		//if ( childLeaves != 0 )
+		//{
+		//	sample.Ev /= static_cast<float>(childLeaves);
+		//	sample.Av /= static_cast<float>(childLeaves);
+		//}
 		
 		sample.averaged = true;
 	}
@@ -287,12 +312,18 @@ void IrradBSSRDFProcess::evaluate( const Point &P, vector<IrradBSSRDFSample> &sa
 
 		//float r = (smp.Pv - P).Length();
 		float rSqr = (smp.Pv - P).LengthSquared();
-		float dr = sqrt(rSqr + zr * zr);
-		float dv = sqrt(rSqr + zv * zv);
+		Spectrum dr = ((zr * zr) + rSqr).Sqrt();
+		Spectrum dv = ((zv * zv) + rSqr).Sqrt();
 		
-		Spectrum C1 = (sigmaTr + 1/dr) * zr;
+		// inverse of Spectrum S: 1 / S
+		Spectrum invDr(1.0);
+		Spectrum invDv(1.0);
+		invDr = invDr / dr;
+		invDv = invDv / dv;
+
+		Spectrum C1 = (sigmaTr + invDr) * zr;
 		Spectrum term2 = Exp(-sigmaTr * dr) / (dr * dr);
-		Spectrum C2 = (sigmaTr + 1/dv) * zv;
+		Spectrum C2 = (sigmaTr + invDv) * zv;
 		Spectrum term4 = Exp(-sigmaTr * dv) / (dv * dv);
 
 		Spectrum Rd = inv4PI * C1 * term2 * C2 * term4;
