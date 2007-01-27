@@ -73,7 +73,7 @@ struct ClosePhoton
 // Photonmap Method Definitions
 BSSRDFIntegrator::BSSRDFIntegrator(int ncaus, int ndir, int nind,
 								   int nl,	int mdepth, float mdist, bool fg,
-								   int gs, bool dp) 
+								   int gs, bool dp, int lightSamples, float epsilon) 
 {
 	nCausticPhotons = ncaus;
 	nIndirectPhotons = nind;
@@ -86,6 +86,8 @@ BSSRDFIntegrator::BSSRDFIntegrator(int ncaus, int ndir, int nind,
 	finalGather = fg;
 	gatherSamples = gs;
 	directWithPhotons = dp;
+	this->lightSamples = lightSamples;
+	this->epsilon = epsilon;
 }
 
 BSSRDFIntegrator::~BSSRDFIntegrator() 
@@ -330,33 +332,23 @@ BSDF* BSSRDFIntegrator::ComputeInitialBSDF( const Point& p, const Normal& n, Ref
  * @param material
  * @param scene
  */
-void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float pArea, Reference<Shape>& triangle, Reference<Material>& material, const Scene *scene )
+void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float pArea, 
+										 Reference<Shape>& triangle, Reference<Material>& material, 
+										 const Scene *scene )
 {
 	Spectrum E;
 
 	// Compute irradiance at current point
 	u_int scramble[2] = { RandomUInt(), RandomUInt() };
 	
-	/************************************************************************/
-	/* TODO: PASS THE NUMBER OF SAMPLES ON THE .PBRT FILE                   */
-	/************************************************************************/
-	int nSamples = 256;
-
 	// *********************** ############## ********************/
 	// COMPUTING THE TEMPORARY BSDF
 	BSDF *bsdf = ComputeInitialBSDF(p, n, triangle, material );
 
-	// *** INDIRECT ILLUMINATION***
 	// Sample the hemisphere, computing the radiance for n sample 
 	// directions in order to compute the irradiance
-	for (int i = 0; i < nSamples; ++i) 
+	for (int i = 0; i < this->lightSamples; ++i) 
 	{
-		// Trace ray to sample radiance for irradiance estimate
-		// Update irradiance statistics for rays traced
-		static StatsCounter nIrradiancePaths("Irradiance Cache",
-			"Paths followed for irradiance estimates");
-		++nIrradiancePaths;
-
 		float u[2];
 		Sample02(i, scramble, u);
 
@@ -364,10 +356,13 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 		Vector w = CosineSampleHemisphere(u[0], u[1]);
 
 		// ### ray from the point on w direction
-		RayDifferential r(p, bsdf->LocalToWorld(w));
+		//RayDifferential r(p, bsdf->LocalToWorld(w));
+
+		w = bsdf->LocalToWorld(w);
 
 		// ### flip ray if going on the wrong direction
-		if (Dot(r.d, n) < 0) r.d = -r.d;
+		//if (Dot(r.d, n) < 0) r.d = -r.d;
+		if (Dot(w, n) < 0) w = -w;
 
 		// generate new sample values for the Direct and Indirect illumination computation
 		GenerateStratifiedSamples();
@@ -387,33 +382,55 @@ void BSSRDFIntegrator::ComputeIrradiance( const Point &p, const Normal &n, float
 
 	// ### Finally, estimate the irradiance based on cosine-weighted distribution 
 	// ### of directions: see Monte Carlo basic Estimator
-	E *= M_PI / float(nSamples);
+	E *= M_PI / float( this->lightSamples );
 
-	// Add computed irradiance value to cache
-	// Update statistics for new irradiance sample
-	static StatsCounter nSamplesComputed("Irradiance Cache",
-		"Irradiance estimates computed");
-	++nSamplesComputed;
+	// Compute bounding box of irradiance sample: seen as a point mass 
+	// because the hierarchical evaluation will take into account all the samples
+	BBox sampleExtent( p );
 
-	if ( ! E.Black() )
-	{
-		// Compute bounding box of irradiance sample: seen as a point mass 
-		// because the hierarchical evaluation will take into account all the samples
-		BBox sampleExtent( p );
+	/************************************************************************/
+	/* TODO: CHECK THIS PART TO CLEAN/OPTIMIZE: PROC/SAMPLE                 */
+	/************************************************************************/
 
-		/************************************************************************/
-		/* TODO: CHECK THIS PART TO CLEAN/OPTIMIZE: PROC/SAMPLE                 */
-		/************************************************************************/
+	BSSRDFMaterial* bssrdfMaterial = BSSRDFIntegrator::Cast( material );
+	IrradBSSRDFSample irradSample(E, p, pArea);
+	IrradBSSRDFProcess irradProcess( bssrdfMaterial, this->epsilon );
 
-		BSSRDFMaterial* bssrdfMaterial = BSSRDFIntegrator::Cast( material );
-		IrradBSSRDFSample irradSample(E, p, pArea);
-		IrradBSSRDFProcess irradProcess( bssrdfMaterial );
+	// just to make sure :)
+	assert( bssrdfMaterial );
 
-		// just to make sure :)
-		assert( bssrdfMaterial );
+	bssrdfMaterial->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
+}
 
-		bssrdfMaterial->bssrdfIrradianceValues->Add(irradSample, sampleExtent, irradProcess);
-	}
+void BSSRDFIntegrator::Postprocess(const Scene *scene)
+{
+	//vector<UniformPoint> container;
+
+	//// Fetch all the BSSRDF-type objects from the scene
+	//vector< Reference<GeometricPrimitive> > bssrdfObjects;
+	//FindBSSRDFObjects(scene, bssrdfObjects);
+
+	//vector< Reference<GeometricPrimitive> >::iterator primitiveIt = bssrdfObjects.begin();
+	//BSSRDFMaterial* bssrdfMaterial = NULL;
+
+	//FILE* f;
+	//fopen_s(&f , "final_octree.out", "w");
+
+	//for (int i = 0; primitiveIt != bssrdfObjects.end(); primitiveIt++, i++)
+	//{
+	//	Reference<GeometricPrimitive> primitive = *primitiveIt;
+	//	Reference<Shape> mesh = primitive->getShape();
+	//	bssrdfMaterial = BSSRDFIntegrator::Cast( primitive->getMaterial() );
+
+	//	break;
+	//}
+
+	//if (bssrdfMaterial)
+	//{
+	//	bssrdfMaterial->bssrdfIrradianceValues->Print(f);
+	//}
+
+	//fclose(f);
 }
 
 /**
@@ -441,7 +458,19 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
 		Reference<Shape> mesh = primitive->getShape();
 		bssrdfMaterial = BSSRDFIntegrator::Cast( primitive->getMaterial() );
-		mesh->GetUniformPointSamples(container, pointArea, bssrdfMaterial->lu);
+		//printf("*** Getting Uniform Point Samples *** \n");
+		
+		float lu = bssrdfMaterial->lu.y();
+		mesh->GetUniformPointSamples(container, pointArea, lu / 15.0f);
+		//printf("*** Finished *** \n");
+
+		/************************************************************************/
+		/* TODO: RETRIEVE THE NUMBER OF SAMPLE POINTS!!!                        */
+		/************************************************************************/
+		int nPoints = container.size();
+		int depth = static_cast<int>(ceil( log(static_cast<float>(nPoints)) / log(8.0f) ));
+		printf("Number of Sample points: << %d >>\n", nPoints);
+		printf("Optimal Tree Depth computed: << %d >>\n", depth);
 
 		// Compute scene's BB, and extend it a little more 
 		// (due to floating-point errors in scene intersections - p. 765): 
@@ -450,28 +479,35 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		Vector delta = 0.01f * (wb.pMax - wb.pMin);
 		wb.pMin -= delta;
 		wb.pMax += delta;
-		bssrdfMaterial->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb);
+		bssrdfMaterial->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb, depth);
 
 		vector<UniformPoint>::iterator pointIt = container.begin();
 
 		fprintf(f, " ###################### POINTS ######################\n");
+		ProgressReporter progress(container.size(), "Precomputing irradiance values");
 
 		for (; pointIt != container.end(); pointIt++)
 		{
 			UniformPoint uniformPoint = *pointIt;
 			ComputeIrradiance(uniformPoint.p, uniformPoint.n, pointArea, uniformPoint.triangle, 
 				primitive->getMaterial(), scene);
-			fprintf(f, " Pv(%.4f, %.4f, %.4f)\n", uniformPoint.p.x, uniformPoint.p.y, uniformPoint.p.z);
+			
+			progress.Update();
 		}
+		progress.Done();
 
 	}
-	fprintf(f, " ###################### POINTS END ######################");
+	fprintf(f, " ###################### POINTS END ######################\n\n");
 
-	bssrdfMaterial->bssrdfIrradianceValues->Print(f);
+	if (bssrdfMaterial)
+	{
+		bssrdfMaterial->bssrdfIrradianceValues->Print(f);
+
+		/*IrradBSSRDFProcess irradProcess( bssrdfMaterial );
+		bssrdfMaterial->bssrdfIrradianceValues->Lookup(Point(0.069f, 0.05f, 0.0f), irradProcess);*/
+	}
+
 	fclose(f);
-
-	IrradBSSRDFProcess irradProcess( bssrdfMaterial );
-	bssrdfMaterial->bssrdfIrradianceValues->Lookup(Point(0.069f, 0.05f, 0.0f), irradProcess);
 }
 
 /**
@@ -740,8 +776,15 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 		// if it is a Translucent Material (BSSRDF)
 		if ( BSSRDFIntegrator::TranslucentMaterial( primitiveRef, &primitive, &material ) )
 		{
-			IrradBSSRDFProcess lookupProcess( material );
+			IrradBSSRDFProcess lookupProcess( material, this->epsilon );
+			//FILE* f;
+			//fopen_s(&f , "evaluate.out", "a");
+			//fprintf(f, "-- ------------ -------------** ------------- -----------\n");
+			//fclose(f);
 			material->bssrdfIrradianceValues->Lookup(isect.dg.p, lookupProcess);
+			//fopen_s(&f , "evaluate.out", "a");
+			//fprintf(f, "-- ------------ -------------## ------------- -----------\n\n");
+			//fclose(f);
 			
 			//
 			// Return the computed Lo for the object: the cosi variable is cosine 
@@ -749,10 +792,8 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 			//
 			Vector wo = -ray.d;
 			float cosi = Dot(wo, isect.dg.nn);
+			
 			Spectrum Lo = lookupProcess.Lo( cosi );
-
-			//Lo.Print(stdout);
-			//printf("\t");
 
 			return Lo;
 		}
@@ -990,17 +1031,19 @@ void PhotonProcess::operator()(const Photon &photon,
 }
 extern "C" DLLEXPORT SurfaceIntegrator *CreateSurfaceIntegrator(const ParamSet &params) 
 {
-	int nCaustic = params.FindOneInt("causticphotons", 20000);
-	int nDirect = params.FindOneInt("directphotons", 100000);
-	int nIndirect = params.FindOneInt("indirectphotons", 100000);
-	int nUsed = params.FindOneInt("nused", 50);
-	int maxDepth = params.FindOneInt("maxdepth", 5);
-	bool finalGather = params.FindOneBool("finalgather", true);
-	bool directPhotons = params.FindOneBool("directwithphotons", false);
-	int gatherSamples = params.FindOneInt("finalgathersamples", 32);
-	float maxDist = params.FindOneFloat("maxdist", .1f);
+	int nCaustic		= params.FindOneInt("causticphotons", 20000);
+	int nDirect			= params.FindOneInt("directphotons", 100000);
+	int nIndirect		= params.FindOneInt("indirectphotons", 100000);
+	int nUsed			= params.FindOneInt("nused", 50);
+	int maxDepth		= params.FindOneInt("maxdepth", 5);
+	bool finalGather	= params.FindOneBool("finalgather", true);
+	bool directPhotons	= params.FindOneBool("directwithphotons", false);
+	int gatherSamples	= params.FindOneInt("finalgathersamples", 32);
+	float maxDist		= params.FindOneFloat("maxdist", .1f);
+	int lightSamples	= params.FindOneInt("lightsamples", 128);
+	float epsilon		= params.FindOneFloat("epsilon", 0.05f);
 	
 	return new BSSRDFIntegrator(nCaustic, nDirect, nIndirect,
 		nUsed, maxDepth, maxDist, finalGather, gatherSamples,
-		directPhotons);
+		directPhotons, lightSamples, epsilon);
 }
