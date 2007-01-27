@@ -29,6 +29,9 @@ public:
 					    float *alpha) const = 0;
 	virtual void Preprocess(const Scene *scene) {
 	}
+
+	virtual void Postprocess(const Scene *scene) {
+	}
 	virtual void RequestSamples(Sample *sample,
 	                            const Scene *scene) {
 	}
