@@ -70,17 +70,24 @@ void PointRepulsion::CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleL
 		Triangle* triangle = TriangleMesh::Cast(aTriangleList.at(i));
 		triangle->GetVertexIndices( &vertices );
 
-		TriangleUseSet triangleUseSet( aTriangleList.at(i), (iVertices+vertices[0]), (iVertices+vertices[1]), (iVertices+vertices[2]) );
-		this->iTriangles.push_back( triangleUseSet );
+		TriangleUseSet triangleUseSet( aTriangleList.at(i), (iVertices+vertices[0]), (iVertices+vertices[1]), (iVertices+vertices[2]), triangle->Id() );
 
-		// calculate the total surface area;
-		iTotalAreaOfSurface += triangleUseSet.GetArea();
+		if (!triangleUseSet.IsVoid())
+		{
+			this->iTriangles.push_back( triangleUseSet );
 
-		// compute relative areas of the sub-triangles of polygon
-		iPartialAreaSums.push_back(iTotalAreaOfSurface);
+			// calculate the total surface area;
+			iTotalAreaOfSurface += triangleUseSet.GetArea();
+
+			// compute relative areas of the sub-triangles of polygon
+			iPartialAreaSums.push_back(iTotalAreaOfSurface);
+		}
+
 		progress.Update();
 	}
 	progress.Done();
+
+	iNumberOfTriangles = iTriangles.size();
 }
 
 /**
@@ -105,7 +112,7 @@ float PointRepulsion::CreateTriangleUseSets(vector<Reference<Shape> >& aTriangle
 		triangle->GetVertexIndices( &vertices );
 
 		TriangleUseSet triangleUseSet( aTriangleList.at(i), (iVertices+vertices[0]), 
-			(iVertices+vertices[1]), (iVertices+vertices[2]) );
+			(iVertices+vertices[1]), (iVertices+vertices[2]), triangle->Id() );
 
 		for (int p = 0; p < 3; p++)
 		{
@@ -140,116 +147,126 @@ void PointRepulsion::LinkTriangleUseSets()
 		// normalize areas so that the sum of all sub-triangles is one
 		iPartialAreaSums[i] /= iTotalAreaOfSurface;
 
-		vector<TriangleEdge*> neighbor;
-		this->iTriangles.at(i).GetEdgeNeighbors( neighbor );
-		if ( neighbor.size() > 2)
-		{
-			continue;
-		}
-
-		vertices1 = &iVertexIndex[3*i];
-
-		// go through the triangles i+1 (triangles that are 
-		// before 1 have already registered as being neighbors).
-		for (int j=i+1; j< iNumberOfTriangles; j++)
-		{
-			Point* vertexNeighbor[2] = { NULL };
-
-			int vertexNeighborCount = 0;
-
-			int* vertices2 =&iVertexIndex[3*j];
-
-			// these indices contain the point numbers counting from 0 to 2
-			// and are used to calculate the edge numbers.
-			// the arrays needs to be kept in order of 0 to 2
-			int indices[2] = {0,0};
-			int indicesNeighbor[2] = {0,0};
-
-			// contain edge number (either 0, 1 or 2)
-			u_int edgePosition = 0;
-			u_int edgePositionNeighbor = 0;
-
-			// loop through the two triangles and try to match vertex indices.
-			for (int k=0; k<3;k++)
+		TriangleUseSet* useSet1 = &iTriangles[i];
+		//// if a triangle is not considered to be void, set up the edge structures
+		//if (!useSet1->IsVoid())
+		//{
+			vector<TriangleEdge*> neighbor;
+			useSet1->GetEdgeNeighbors( neighbor );
+			if ( neighbor.size() > 2)
 			{
-				for(int l=0; l<3;l++)
-				{
-					if (vertices1[k] == vertices2[l])
-					{
-						vertexNeighbor[vertexNeighborCount] = (iVertices+vertices1[k]);
-						indices[vertexNeighborCount] = k;
-						indicesNeighbor[vertexNeighborCount] = l;
+				continue;
+			}
+	
+			vertices1 = &iVertexIndex[3*useSet1->GetTriangleId()];
+	
+			// go through the triangles i+1 (triangles that are 
+			// before 1 have already registered as being neighbors).
+			for (int j=i+1; j< iNumberOfTriangles; j++)
+			{
+				TriangleUseSet* useSet2 = &iTriangles[j];
 
-						vertexNeighborCount++;
-						continue;
+				Point* vertexNeighbor[2] = { NULL };
+	
+				int vertexNeighborCount = 0;
+	
+				int* vertices2 =&iVertexIndex[3*useSet2->GetTriangleId()];
+	
+				// these indices contain the point numbers counting from 0 to 2
+				// and are used to calculate the edge numbers.
+				// the arrays needs to be kept in order of 0 to 2
+				int indices[2] = {0,0};
+				int indicesNeighbor[2] = {0,0};
+	
+				// contain edge number (either 0, 1 or 2)
+				u_int edgePosition = 0;
+				u_int edgePositionNeighbor = 0;
+	
+				// loop through the two triangles and try to match vertex indices.
+				for (int k=0; k<3;k++)
+				{
+					for(int l=0; l<3;l++)
+					{
+						if (vertices1[k] == vertices2[l])
+						{
+							vertexNeighbor[vertexNeighborCount] = (iVertices+vertices1[k]);
+							indices[vertexNeighborCount] = k;
+							indicesNeighbor[vertexNeighborCount] = l;
+	
+							vertexNeighborCount++;
+							continue;
+						}
+					}
+	
+					// once we found two neighbors, we have to find out to which edge they are connected and jump out of this loop
+					if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
+					{
+						// calculate the edge position for this triangle
+						if ((indices[0] == 0) && (indices[1] == 1))
+						{
+							edgePosition = 0;
+						}
+						else if ((indices[0] == 1) && (indices[1] == 2))
+						{
+							edgePosition = 1;
+						}
+						else 
+						{
+							edgePosition = 2;
+						}
+	
+						// make sure the numbers are in order
+						// (for the neighbor triangle edge, this might not be the case)
+						int minVal = min(indicesNeighbor[0], indicesNeighbor[1]);
+						int maxVal = max(indicesNeighbor[0], indicesNeighbor[1]);
+	
+						indicesNeighbor[0] = minVal;
+						indicesNeighbor[1] = maxVal;
+						if ((indicesNeighbor[0] == 0) && (indicesNeighbor[1] == 1))
+						{
+							edgePositionNeighbor = 0;
+						}
+						else if ((indicesNeighbor[0] == 1) && (indicesNeighbor[1] == 2))
+						{
+							edgePositionNeighbor = 1;
+						}
+						else 
+						{
+							edgePositionNeighbor = 2;
+						}
+						break;
 					}
 				}
 
-				// once we found two neighbors, we have to find out to which edge they are connected and jump out of this loop
-				if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
-				{
-					// calculate the edge position for this triangle
-					if ((indices[0] == 0) && (indices[1] == 1))
+				//TriangleUseSet* useSet2 = &iTriangles[j];
+				//if (!useSet2->IsVoid())
+				//{
+					// if neighbor is found, calculate rotation rotation angle, matrices and register neighbors
+					if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
 					{
-						edgePosition = 0;
+						Reference<Matrix4x4> alignToAxis = new Matrix4x4;
+						Reference<Matrix4x4> alignToAxisInv = new Matrix4x4;
+						float rotationAngle;
+		
+						CalculateTransformationMatrices( iTriangles.at(i), iTriangles.at(j), *vertexNeighbor[0], *vertexNeighbor[1], alignToAxis, alignToAxisInv, rotationAngle );
+						TriangleEdge* neighborj = new TriangleEdge( &iTriangles.at(j), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
+						this->iTriangles.at(i).AddEdgeNeightbor( neighborj, edgePosition );
+		
+						// swap edge points for neighbor
+						Point* tempPoint = vertexNeighbor[0];
+						vertexNeighbor[0] = vertexNeighbor[1];
+						vertexNeighbor[1] = tempPoint;
+		
+						Reference<Matrix4x4> tempMatrix = alignToAxis;
+						alignToAxis = alignToAxisInv;
+						alignToAxisInv = tempMatrix;
+		
+						TriangleEdge* neighbori = new TriangleEdge( &iTriangles.at(i), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
+						this->iTriangles.at(j).AddEdgeNeightbor( neighbori, edgePositionNeighbor );
 					}
-					else if ((indices[0] == 1) && (indices[1] == 2))
-					{
-						edgePosition = 1;
-					}
-					else 
-					{
-						edgePosition = 2;
-					}
-
-					// make sure the numbers are in order
-					// (for the neighbor triangle edge, this might not be the case)
-					int minVal = min(indicesNeighbor[0], indicesNeighbor[1]);
-					int maxVal = max(indicesNeighbor[0], indicesNeighbor[1]);
-
-					indicesNeighbor[0] = minVal;
-					indicesNeighbor[1] = maxVal;
-					if ((indicesNeighbor[0] == 0) && (indicesNeighbor[1] == 1))
-					{
-						edgePositionNeighbor = 0;
-					}
-					else if ((indicesNeighbor[0] == 1) && (indicesNeighbor[1] == 2))
-					{
-						edgePositionNeighbor = 1;
-					}
-					else 
-					{
-						edgePositionNeighbor = 2;
-					}
-					break;
-				}
+				//}
 			}
-
-
-			// if neighbor is found, calculate rotation rotation angle, matrices and register neighbors
-			if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
-			{
-				Reference<Matrix4x4> alignToAxis = new Matrix4x4;
-				Reference<Matrix4x4> alignToAxisInv = new Matrix4x4;
-				float rotationAngle;
-
-				CalculateTransformationMatrices( iTriangles.at(i), iTriangles.at(j), *vertexNeighbor[0], *vertexNeighbor[1], alignToAxis, alignToAxisInv, rotationAngle );
-				TriangleEdge* neighborj = new TriangleEdge( &iTriangles.at(j), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
-				this->iTriangles.at(i).AddEdgeNeightbor( neighborj, edgePosition );
-
-				// swap edge points for neighbor
-				Point* tempPoint = vertexNeighbor[0];
-				vertexNeighbor[0] = vertexNeighbor[1];
-				vertexNeighbor[1] = tempPoint;
-
-				Reference<Matrix4x4> tempMatrix = alignToAxis;
-				alignToAxis = alignToAxisInv;
-				alignToAxisInv = tempMatrix;
-
-				TriangleEdge* neighbori = new TriangleEdge( &iTriangles.at(i), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
-				this->iTriangles.at(j).AddEdgeNeightbor( neighbori, edgePositionNeighbor );
-			}
-		}
+		//}
 
 		progress.Update();
 	}
