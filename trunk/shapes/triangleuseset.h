@@ -58,7 +58,7 @@ class TriangleUseSet
 {
 	//METHODS
 public:
-	TriangleUseSet(Reference<Shape>& aTriangle, Point* aV1, Point* aV2, Point* aV3);
+	TriangleUseSet(Reference<Shape>& aTriangle, Point* aV1, Point* aV2, Point* aV3, int aTriangleId);
 	~TriangleUseSet();
 
 	void AddSamplePoint(SamplePointContainer* aSamplePoint);
@@ -71,16 +71,17 @@ public:
 	inline int GetTriangleId();
 	Vector GetCentroid();
 	Reference<Shape> GetTriangle();
+	bool IsVoid();
 	Point* iVertices[3];
 	list<SamplePointContainer* > iSamplePoints;
 
 private:
 	// VARIABLES
-	static int triangleCounter;
-
 	int iTriangleId;
 	TriangleEdge* iEdgeNeighbors[3];
 	Vector iCentroid;
+
+	bool iVoid;
 
 	Normal iNormal;
 	float iTriangleArea;
@@ -110,6 +111,12 @@ inline
 Vector TriangleUseSet::GetCentroid()
 {
 	return iCentroid;
+}
+
+inline
+bool TriangleUseSet::IsVoid()
+{
+	return iVoid;
 }
 
 #endif
