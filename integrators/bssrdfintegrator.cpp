@@ -23,6 +23,9 @@
 
 using namespace std;
 
+float BSSRDFIntegrator::maxOmega = 0.0f;
+float BSSRDFIntegrator::minOmega = 0.0f;
+
 struct Photon 
 {
 	// Photon Constructor
@@ -73,7 +76,7 @@ struct ClosePhoton
 // Photonmap Method Definitions
 BSSRDFIntegrator::BSSRDFIntegrator(int ncaus, int ndir, int nind,
 								   int nl,	int mdepth, float mdist, bool fg,
-								   int gs, bool dp, int lightSamples, float epsilon) 
+								   int gs, bool dp, int lightSamples, float epsilon, float nPointFactor) 
 {
 	nCausticPhotons = ncaus;
 	nIndirectPhotons = nind;
@@ -88,6 +91,9 @@ BSSRDFIntegrator::BSSRDFIntegrator(int ncaus, int ndir, int nind,
 	directWithPhotons = dp;
 	this->lightSamples = lightSamples;
 	this->epsilon = epsilon;
+	this->maxOmega = 0.0f;
+	this->minOmega = 0.0f;
+	this->nPointFactor = nPointFactor;
 }
 
 BSSRDFIntegrator::~BSSRDFIntegrator() 
@@ -431,6 +437,9 @@ void BSSRDFIntegrator::Postprocess(const Scene *scene)
 	//}
 
 	//fclose(f);
+
+	printf(">>>> Max Omega value: %f\n", maxOmega);
+	printf(">>>> Min Omega value: %f\n\n", minOmega);
 }
 
 /**
@@ -450,19 +459,17 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 	BSSRDFMaterial* bssrdfMaterial = NULL;
 	float pointArea;
 
-	FILE* f;
-	fopen_s(&f , "octree.out", "w");
+	//FILE* f;
+	//fopen_s(&f , "octree.out", "w");
 
 	for (int i = 0; primitiveIt != bssrdfObjects.end(); primitiveIt++, i++)
 	{
 		Reference<GeometricPrimitive> primitive = *primitiveIt;
 		Reference<Shape> mesh = primitive->getShape();
 		bssrdfMaterial = BSSRDFIntegrator::Cast( primitive->getMaterial() );
-		//printf("*** Getting Uniform Point Samples *** \n");
 		
 		float lu = bssrdfMaterial->lu.y();
-		mesh->GetUniformPointSamples(container, pointArea, lu / 15.0f);
-		//printf("*** Finished *** \n");
+		mesh->GetUniformPointSamples(container, pointArea, lu / this->nPointFactor);
 
 		/************************************************************************/
 		/* TODO: RETRIEVE THE NUMBER OF SAMPLE POINTS!!!                        */
@@ -479,11 +486,11 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		Vector delta = 0.01f * (wb.pMax - wb.pMin);
 		wb.pMin -= delta;
 		wb.pMax += delta;
+
 		bssrdfMaterial->bssrdfIrradianceValues = new ExOctree<IrradBSSRDFSample, IrradBSSRDFProcess>(wb, depth);
 
 		vector<UniformPoint>::iterator pointIt = container.begin();
 
-		fprintf(f, " ###################### POINTS ######################\n");
 		ProgressReporter progress(container.size(), "Precomputing irradiance values");
 
 		for (; pointIt != container.end(); pointIt++)
@@ -497,17 +504,16 @@ void BSSRDFIntegrator::ComputeBSSRDFIrradianceValues( const Scene *scene )
 		progress.Done();
 
 	}
-	fprintf(f, " ###################### POINTS END ######################\n\n");
 
-	if (bssrdfMaterial)
-	{
-		bssrdfMaterial->bssrdfIrradianceValues->Print(f);
+	//if (bssrdfMaterial)
+	//{
+	//	bssrdfMaterial->bssrdfIrradianceValues->Print(f);
 
-		/*IrradBSSRDFProcess irradProcess( bssrdfMaterial );
-		bssrdfMaterial->bssrdfIrradianceValues->Lookup(Point(0.069f, 0.05f, 0.0f), irradProcess);*/
-	}
+	//	/*IrradBSSRDFProcess irradProcess( bssrdfMaterial );
+	//	bssrdfMaterial->bssrdfIrradianceValues->Lookup(Point(0.069f, 0.05f, 0.0f), irradProcess);*/
+	//}
 
-	fclose(f);
+	//fclose(f);
 }
 
 /**
@@ -760,8 +766,14 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 	// Compute reflected radiance with photon map
 	Spectrum L(0.);
 	Intersection isect;
+
 	if (scene->Intersect(ray, &isect)) 
 	{
+		// Evaluate BSDF at hit point
+		BSDF *bsdf = isect.GetBSDF(ray);
+		const Point &p = bsdf->dgShading.p;
+		const Normal &n = bsdf->dgShading.nn;
+
 		if (alpha) *alpha = 1.;
 
 		/************************************************************************/
@@ -777,14 +789,10 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 		if ( BSSRDFIntegrator::TranslucentMaterial( primitiveRef, &primitive, &material ) )
 		{
 			IrradBSSRDFProcess lookupProcess( material, this->epsilon );
-			//FILE* f;
-			//fopen_s(&f , "evaluate.out", "a");
-			//fprintf(f, "-- ------------ -------------** ------------- -----------\n");
-			//fclose(f);
 			material->bssrdfIrradianceValues->Lookup(isect.dg.p, lookupProcess);
-			//fopen_s(&f , "evaluate.out", "a");
-			//fprintf(f, "-- ------------ -------------## ------------- -----------\n\n");
-			//fclose(f);
+
+			BSSRDFIntegrator::maxOmega = max(BSSRDFIntegrator::maxOmega, lookupProcess.maxOmega);
+			BSSRDFIntegrator::minOmega = min(BSSRDFIntegrator::minOmega, lookupProcess.minOmega);
 			
 			//
 			// Return the computed Lo for the object: the cosi variable is cosine 
@@ -806,11 +814,6 @@ Spectrum BSSRDFIntegrator::Li(const Scene *scene,
 
 		// Compute emitted light if ray hit an area light source
 		L += isect.Le(wo);
-
-		// Evaluate BSDF at hit point
-		BSDF *bsdf = isect.GetBSDF(ray);
-		const Point &p = bsdf->dgShading.p;
-		const Normal &n = bsdf->dgShading.nn;
 
 		// Compute direct lighting for photon map integrator
 		if (directWithPhotons)
@@ -1042,8 +1045,9 @@ extern "C" DLLEXPORT SurfaceIntegrator *CreateSurfaceIntegrator(const ParamSet &
 	float maxDist		= params.FindOneFloat("maxdist", .1f);
 	int lightSamples	= params.FindOneInt("lightsamples", 128);
 	float epsilon		= params.FindOneFloat("epsilon", 0.05f);
+	float nPointFactor	= params.FindOneFloat("npointfactor", 3.0f);
 	
 	return new BSSRDFIntegrator(nCaustic, nDirect, nIndirect,
 		nUsed, maxDepth, maxDist, finalGather, gatherSamples,
-		directPhotons, lightSamples, epsilon);
+		directPhotons, lightSamples, epsilon, nPointFactor);
 }
