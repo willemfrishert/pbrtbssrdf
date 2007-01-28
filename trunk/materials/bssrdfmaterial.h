@@ -86,7 +86,8 @@ struct IrradBSSRDFProcess
 		float delta = (P - samples[ 0 ].Pv).LengthSquared();
 		float omega = Av / delta;
 
-		//printf("%f\t\t", omega);
+		maxOmega = max(maxOmega, omega);
+		minOmega = min(minOmega, omega);
 
 		// check if "voxel is small enough" to subdivide
 		return omega > epsilon;
@@ -189,6 +190,12 @@ struct IrradBSSRDFProcess
 	 * @description the material containing the parameters to compute the Radiance
 	 */
 	BSSRDFMaterial* material;
+
+	/*
+	 * Max and min omega values for a search
+	 */
+	float maxOmega;
+	float minOmega;
 };
 
 // static variable
@@ -369,6 +376,9 @@ IrradBSSRDFProcess::IrradBSSRDFProcess(BSSRDFMaterial* material, float eps)
 	Fdr			= this->material->Fdr;
 	A			= this->material->A;
 	zv			= this->material->zv;
+
+	maxOmega	= 0.0f;
+	minOmega	= 0.0f;
 }
 
 Spectrum IrradBSSRDFProcess::Lo(float w)
