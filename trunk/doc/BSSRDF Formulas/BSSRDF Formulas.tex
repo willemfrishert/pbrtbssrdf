@@ -1,0 +1,83 @@
+\documentclass{article}
+
+%\usepackage{pxfonts}
+\usepackage{amsmath}
+
+\title{BSSRDF Formulas}
+
+\begin{document}
+\maketitle
+
+\section{...}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|c l|}
+\hline
+${\sigma} _s ^{\prime}$ & $Reduced$ Scattering Coefficient: on the table \\
+\hline
+${\sigma} _a$ & Absorption Coefficient: on the table \\
+\hline
+$\alpha ^{\prime}$ & Reduced Albedo \\
+\hline
+${\sigma}_{tr}$ & Effective transport extinction coefficient \\
+\hline
+$d_r$ & Distance to the real light source \\
+\hline
+$d_v$ & Distance to the virtual light source \\
+\hline
+$r = ||x_o - x_i||$ & Distance from $x_o$ to the point of illumination \\
+\hline
+$z_r$ & Distance from the real dipole light to the surface \\
+\hline
+$z_v$ & Distance from the virtual dipole light to the surface \\
+\hline
+$F_{dr}$ & Diffuse Fresnel term \\
+\hline
+$\eta$ & Relative index of refraction: on the table \\
+\hline
+$l _u$ & Mean free path \\
+\hline
+\end{tabular}
+\end{center}
+\end{table}
+
+
+$Reduced$ Scattering Coefficient: could be obtained from the table
+\begin{equation}
+{\sigma} _s ^{\prime} = (1 - g) \sigma _s
+\end{equation}
+
+??? Coefficient
+\begin{equation}
+{\sigma} _t ^{\prime} = {\sigma} _s ^{\prime} + {\sigma} _a
+\end{equation}
+
+Mean Free Path
+\begin{equation}
+l _u = \frac{1}{{\sigma} _t ^{\prime}}
+\end{equation}
+
+Now, for the big formula
+
+\begin{equation}
+\frac{dM_o(x_o)}{d\Phi _i(x_i)\alpha ^{\prime}} = \frac{1}{4\pi}
+\left\{ 
+z_r ( {\sigma}_{tr} + \frac{1}{d_r} ) \frac{e^{-{\sigma} _{t_r} d_r}}{d _r ^2} + 
+z_v ( {\sigma}_{tr} + \frac{1}{d_v} ) \frac{e^{-{\sigma} _{t_r} d_v}}{d _v ^2}
+\right\}
+\end{equation}
+
+\begin{align}
+\alpha ^{\prime} = \frac{{\sigma} _s ^{\prime}} {{\sigma} _t ^{\prime}} \\
+{\sigma}_{tr} = \sqrt{3 {\sigma}_a {\sigma} _t ^{\prime}} \\
+d_r = \sqrt{r^2 + z_r^2} \\
+d_v = \sqrt{r^2 + z_v^2} \\
+r = ||x_o - x_i|| \\
+z_r = l_u \\
+z_v = l_u ( 1 + \frac{4}{3}A ) \\
+A = \frac{1 + F_{dr}}{1 - F_{dr}} \\
+F_{dr} = -\frac{1.440}{\eta^2} + \frac{0.710}{\eta} + 0.668 + 0.0636\eta
+\end{align}
+
+\end{document}
