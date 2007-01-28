@@ -13,52 +13,52 @@ class SamplePointContainer;
 struct TriangleEdge
 {
 	TriangleEdge(TriangleUseSet* aEdgeNeighbor,
-				 Point* aEdgeNeighborsVertex[2],
-				 Reference<Matrix4x4> aArbitraryRotation,
-				 Reference<Matrix4x4> aArbitraryRotationInv,
-				 float aRotationAngle)
-	: iEdgeNeighbor(aEdgeNeighbor)
-	, iArbitraryRotation(aArbitraryRotation)
-	, iArbitraryRotationInv(aArbitraryRotationInv)
-	, iRotationAngle(aRotationAngle)
+				 Point* aEdgeNeighborsVertex[2])//,
+				 //Reference<Matrix4x4> aArbitraryRotation,
+				 //Reference<Matrix4x4> aArbitraryRotationInv,
+				 //float aRotationAngle)
+	: iNeighbor(aEdgeNeighbor)
+	//, iArbitraryRotation(aArbitraryRotation)
+	//, iArbitraryRotationInv(aArbitraryRotationInv)
+	//, iRotationAngle(aRotationAngle)
 	{
 		iP0 = aEdgeNeighborsVertex[0];
 		iP1 = aEdgeNeighborsVertex[1];
 
-		iTranslateToAxis = new Matrix4x4(1, 0, 0, iP0->x,
-										 0, 1, 0, iP0->y,
-										 0, 0, 1, iP0->z,
-										 0, 0, 0,      1);
+		//iTranslateToAxis = new Matrix4x4(1, 0, 0, iP0->x,
+		//								 0, 1, 0, iP0->y,
+		//								 0, 0, 1, iP0->z,
+		//								 0, 0, 0,      1);
 
-		iTranslateToAxisInv = new Matrix4x4(1, 0, 0, -iP0->x,
-											0, 1, 0, -iP0->y,
-											0, 0, 1, -iP0->z,
-											0, 0, 0,       1);
+		//iTranslateToAxisInv = new Matrix4x4(1, 0, 0, -iP0->x,
+		//									0, 1, 0, -iP0->y,
+		//									0, 0, 1, -iP0->z,
+		//									0, 0, 0,       1);
 	};
 
 	// pointer to the triangle next door
-	TriangleUseSet* iEdgeNeighbor;
+	TriangleUseSet* iNeighbor;
 	
 	// Points making up the shared edge between two triangles
 	Point* iP0;
 	Point* iP1;
 	
 	// Matrices to rotate around an arbiraty axis
-	Reference<Matrix4x4> iTranslateToAxis;
-	Reference<Matrix4x4> iTranslateToAxisInv;
+	//Reference<Matrix4x4> iTranslateToAxis;
+	//Reference<Matrix4x4> iTranslateToAxisInv;
 
-	Reference<Matrix4x4> iArbitraryRotation;
-	Reference<Matrix4x4> iArbitraryRotationInv;
+	//Reference<Matrix4x4> iArbitraryRotation;
+	//Reference<Matrix4x4> iArbitraryRotationInv;
 
 	// angle between two triangles
-	float iRotationAngle;
+	//float iRotationAngle;
 };
 
 class TriangleUseSet
 {
 	//METHODS
 public:
-	TriangleUseSet(Reference<Shape>& aTriangle, Point* aV1, Point* aV2, Point* aV3, int aTriangleId);
+	TriangleUseSet(Reference<Shape>& aTriangle, Point* aV1, Point* aV2, Point* aV3);
 	~TriangleUseSet();
 
 	void AddSamplePoint(SamplePointContainer* aSamplePoint);
@@ -71,17 +71,16 @@ public:
 	inline int GetTriangleId();
 	Vector GetCentroid();
 	Reference<Shape> GetTriangle();
-	bool IsVoid();
 	Point* iVertices[3];
 	list<SamplePointContainer* > iSamplePoints;
 
 private:
 	// VARIABLES
+	static int triangleCounter;
+
 	int iTriangleId;
 	TriangleEdge* iEdgeNeighbors[3];
 	Vector iCentroid;
-
-	bool iVoid;
 
 	Normal iNormal;
 	float iTriangleArea;
@@ -111,12 +110,6 @@ inline
 Vector TriangleUseSet::GetCentroid()
 {
 	return iCentroid;
-}
-
-inline
-bool TriangleUseSet::IsVoid()
-{
-	return iVoid;
 }
 
 #endif
