@@ -2,13 +2,13 @@
 #include "samplepointcontainer.h"
 #include "trianglemesh.h"
 
-#define ZERO(x) (x.Length() < 0.0000001)
+int TriangleUseSet::triangleCounter=0;
 
-TriangleUseSet::TriangleUseSet(Reference<Shape>& aTriangle, Point* aP1, Point* aP2, Point* aP3, int aTriangleId )
-: iVoid(false)
-, iTriangleArea(0)
-, iTriangleId(aTriangleId)
+TriangleUseSet::TriangleUseSet(Reference<Shape>& aTriangle, Point* aP1, Point* aP2, Point* aP3 )
 {
+	iTriangleId = triangleCounter;
+	triangleCounter++;
+
 	iVertices[0] = aP1;
 	iVertices[1] = aP2;
 	iVertices[2] = aP3;
@@ -22,17 +22,8 @@ TriangleUseSet::TriangleUseSet(Reference<Shape>& aTriangle, Point* aP1, Point* a
 	iCentroid.z = (iVertices[0]->z+iVertices[1]->z+iVertices[2]->z)*0.33f;
 
 	Vector crossProduct = Cross( *aP2-*aP1, *aP3-*aP1 );
-
-	// if the triangle vertices are on top of each other, consider the triangle to be a hole
-	if ZERO(crossProduct) 
-	{
-		iVoid = true;
-	}
-	else
-	{
-		iNormal = Normal( Normalize(crossProduct) );
-		iTriangleArea = crossProduct.Length() * 0.5f;
-	}
+	iNormal = Normal( Normalize(crossProduct) );
+	iTriangleArea = crossProduct.Length() * 0.5f;
 
 	iTriangle = aTriangle;
 }

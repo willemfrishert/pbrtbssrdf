@@ -232,18 +232,16 @@ void PointRepulsion::LinkTriangleUseSets()
 				}
 			}
 
-
 			// if neighbor is found, calculate rotation rotation angle, matrices and register neighbors
 			if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
 			{
-				numberOfNeighbors++;
+				//Reference<Matrix4x4> alignToAxis = new Matrix4x4;
+				//Reference<Matrix4x4> alignToAxisInv = new Matrix4x4;
+				//float rotationAngle;
 
-				Reference<Matrix4x4> alignToAxis = new Matrix4x4;
-				Reference<Matrix4x4> alignToAxisInv = new Matrix4x4;
-				float rotationAngle;
-
-				CalculateTransformationMatrices( iTriangles.at(i), iTriangles.at(j), *vertexNeighbor[0], *vertexNeighbor[1], alignToAxis, alignToAxisInv, rotationAngle );
-				TriangleEdge* neighborj = new TriangleEdge( &iTriangles.at(j), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
+				//CalculateTransformationMatrices( iTriangles.at(i), iTriangles.at(j), *vertexNeighbor[0], *vertexNeighbor[1], alignToAxis, alignToAxisInv, rotationAngle );
+				//TriangleEdge* neighborj = new TriangleEdge( &iTriangles.at(j), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
+				TriangleEdge* neighborj = new TriangleEdge( &iTriangles.at(j), vertexNeighbor );
 				this->iTriangles.at(i).AddEdgeNeightbor( neighborj, edgePosition );
 
 				// swap edge points for neighbor
@@ -251,11 +249,12 @@ void PointRepulsion::LinkTriangleUseSets()
 				vertexNeighbor[0] = vertexNeighbor[1];
 				vertexNeighbor[1] = tempPoint;
 
-				Reference<Matrix4x4> tempMatrix = alignToAxis;
-				alignToAxis = alignToAxisInv;
-				alignToAxisInv = tempMatrix;
+				//Reference<Matrix4x4> tempMatrix = alignToAxis;
+				//alignToAxis = alignToAxisInv;
+				//alignToAxisInv = tempMatrix;
 
-				TriangleEdge* neighbori = new TriangleEdge( &iTriangles.at(i), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
+				//TriangleEdge* neighbori = new TriangleEdge( &iTriangles.at(i), vertexNeighbor, alignToAxis, alignToAxisInv, rotationAngle );
+				TriangleEdge* neighbori = new TriangleEdge( &iTriangles.at(i), vertexNeighbor );
 				this->iTriangles.at(j).AddEdgeNeightbor( neighbori, edgePositionNeighbor );
 			}
 		}
@@ -267,9 +266,24 @@ void PointRepulsion::LinkTriangleUseSets()
 }
 
 void PointRepulsion::CalculateTransformationMatrices( TriangleUseSet &aTriangle, TriangleUseSet& aNeighborTriangle,
-													 Point& P0, Point& P1, Reference<Matrix4x4>& aArbitraryRotation,
-													 Reference<Matrix4x4>& aArbitraryRotationInv, float& aRotationAngle )
+													 Point& P0, Point& P1,
+													 Reference<Matrix4x4>& aArbitraryRotation,
+													 Reference<Matrix4x4>& aArbitraryRotationInv,
+													 Reference<Matrix4x4>& aTranslateToAxis,
+													 Reference<Matrix4x4>& aTranslateToAxisInv )
 {
+	float aRotationAngle = 0;
+
+	aTranslateToAxis = new Matrix4x4(1, 0, 0, P0.x,
+									 0, 1, 0, P0.y,
+									 0, 0, 1, P0.z,
+									 0, 0, 0,    1);
+
+	aTranslateToAxisInv = new Matrix4x4(1, 0, 0, -P0.x,
+										0, 1, 0, -P0.y,
+										0, 0, 1, -P0.z,
+										0, 0, 0,     1);
+
 	// Calculate the angle of rotation.
 	// This is the angle between the surface of this triangle and the neighbor.
 	Normal normal = aTriangle.GetNormal();
@@ -452,7 +466,7 @@ void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale, const str
 	vector<TriangleUseSet>::iterator triangleIterator = iTriangles.begin();
 
 	list< pair<TriangleUseSet*, Reference<Matrix4x4> > > triangleQueue;
-	while ( triangleIterator != iTriangles.end() )
+	for ( int i = 0; triangleIterator != iTriangles.end(); triangleIterator++, i++ )
 	{
 
 		Reference<Matrix4x4> transform = new Matrix4x4;
@@ -468,7 +482,6 @@ void PointRepulsion::ComputeRepulsiveForces( const float& aForceScale, const str
 		}
 
 		triangleQueue.clear();
-		triangleIterator++;
 		progress.Update();
 	}
 	progress.Done();
@@ -502,17 +515,31 @@ void PointRepulsion::MapSamplePointsToPlane(list< pair<TriangleUseSet*, Referenc
 	for (; neighborIter != neighborIterEnd; neighborIter++)
 	{
 		//pointers to neighboring edge triangles of the current triangle that is being evaluated
-		TriangleUseSet* neighborTriangle = (*neighborIter)->iEdgeNeighbor;
+		TriangleUseSet* neighborTriangle = (*neighborIter)->iNeighbor;
 
 		// if the triangle has already been evaluated,
 		// then it means that the sample points have already been rotated
 		// and their repulsive forces have already been computed and stored.
 		if (false == aTriangleMapped[neighborTriangle->GetTriangleId()])
 		{
+			Reference<Matrix4x4> iArbitraryRotation = new Matrix4x4();
+			Reference<Matrix4x4> iArbitraryRotationInv = new Matrix4x4();
+			Reference<Matrix4x4> iTranslateToAxis = new Matrix4x4();
+			Reference<Matrix4x4> iTranslateToAxisInv = new Matrix4x4();
+
+			/*CalculateTransformationMatrices(iTriangles.at(i), iTriangles.at(j),
+											*vertexNeighbor[0], *vertexNeighbor[1],
+											alignToAxis, alignToAxisInv, rotationAngle );*/
+
+			CalculateTransformationMatrices(*evaluatedTriangle, *neighborTriangle,
+											*(*neighborIter)->iP0, *(*neighborIter)->iP1,
+											iArbitraryRotation, iArbitraryRotationInv,
+											iTranslateToAxis, iTranslateToAxisInv );
+
 			Reference<Matrix4x4> edgeRotationMatrix = Matrix4x4::Mul( aEdgeRotationMatrix, 
-														Matrix4x4::Mul( (*neighborIter)->iTranslateToAxis,
-															Matrix4x4::Mul( (*neighborIter)->iArbitraryRotation,
-																			(*neighborIter)->iTranslateToAxisInv ) ) );
+														Matrix4x4::Mul( iTranslateToAxis,
+															Matrix4x4::Mul( iArbitraryRotation,
+																			iTranslateToAxisInv ) ) );
 			Transform transform(edgeRotationMatrix);
 
 			float minimalDistance = ComputeSmallestDistanceBetweenTriangles(*neighborTriangle, aMainTriangle, transform);
@@ -675,7 +702,7 @@ void PointRepulsion::ComputeNewPositions( const string& aProcessString )
 bool PointRepulsion::ComputeNewPositions(Point& aPPrime, Point* p, SamplePointContainer* container)
 {
 	static int iterationCounter = 0;
-	TriangleEdge* nextNeighbor = NULL;
+	TriangleEdge* edge = NULL;
 	Point p0, p1, edgePoint;
 	TriangleUseSet* useSet = container->GetTriangle();
 
@@ -684,7 +711,7 @@ bool PointRepulsion::ComputeNewPositions(Point& aPPrime, Point* p, SamplePointCo
 	// the neighboring triangle where the point might lay in
 	// the edge (p0 and p1) which is intersected
 	// the point of intersection with the edge
-	bool inside = PointInsideTriangle( aPPrime, *p, *useSet, &nextNeighbor, p0, p1, edgePoint );
+	bool inside = PointInsideTriangle( aPPrime, *p, *useSet, &edge, p0, p1, edgePoint );
 
 //	PushPointToPlane(aUseSet->GetNormal(), *aUseSet->iVertices[0], edgePoint);
 	// if the point is inside the triangle, point p becomes p' 
@@ -709,22 +736,32 @@ bool PointRepulsion::ComputeNewPositions(Point& aPPrime, Point* p, SamplePointCo
 		// shortening the begin point
 		*p = edgePoint;
 		
-		if (NULL != nextNeighbor)
+		// if there is an edge specified, then that means there's a neighboring triangle
+		if (NULL != edge)
 		{
-			// move the point to a new triangle;
-			container->SetTriangle( nextNeighbor->iEdgeNeighbor );
-
 			// calculate a displacement vector from the point on the edge to pPrime
 			// and rotate the displacement vector so it's aligned with the neighboring triangle
 			Vector displacement( aPPrime-*p );
 
+			Reference<Matrix4x4> iArbitraryRotation = new Matrix4x4();
+			Reference<Matrix4x4> iArbitraryRotationInv = new Matrix4x4();
+			Reference<Matrix4x4> iTranslateToAxis = new Matrix4x4();
+			Reference<Matrix4x4> iTranslateToAxisInv = new Matrix4x4();
+
+			CalculateTransformationMatrices(*useSet, *edge->iNeighbor,
+											*edge->iP0, *edge->iP1,
+											iArbitraryRotation, iArbitraryRotationInv,
+											iTranslateToAxis, iTranslateToAxisInv );
+
 			// rotate the displacement vector onto the triangle
-			Transform transform = Transform( nextNeighbor->iArbitraryRotationInv, nextNeighbor->iArbitraryRotation );
+			Transform transform = Transform( iArbitraryRotationInv, iArbitraryRotation );
 			displacement = transform(displacement);
 
 			// calculate a new pPrime using the point and a vector and 
 			aPPrime = *p+displacement;
 
+			// move the point to a new triangle;
+			container->SetTriangle( edge->iNeighbor );
 #ifdef DEBUG_POINTREPULSION
 			Normal normal = useSet->GetNormal();
 			Normal testNormal = Normalize( transform( normal ) );

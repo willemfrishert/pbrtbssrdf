@@ -28,9 +28,15 @@ private:
 	void SetupTriangleUseSets(vector<Reference<Shape> >& aTriangleList);
 	void CreateTriangleUseSets(vector<Reference<Shape> >& aTriangleList);
 	void LinkTriangleUseSets();
-	void CalculateTransformationMatrices(TriangleUseSet &aTriangle, TriangleUseSet& aNeighborTriangle,
-										 Point& P0, Point& P1, Reference<Matrix4x4>& aArbitraryRotation,
-										 Reference<Matrix4x4>& aArbitraryRotationInv, float& aRotationAngle);
+	//void CalculateTransformationMatrices(TriangleUseSet &aTriangle, TriangleUseSet& aNeighborTriangle,
+	//									 Point& P0, Point& P1, Reference<Matrix4x4>& aArbitraryRotation,
+	//									 Reference<Matrix4x4>& aArbitraryRotationInv, float& aRotationAngle);
+	void CalculateTransformationMatrices( TriangleUseSet &aTriangle, TriangleUseSet& aNeighborTriangle,
+										  Point& P0, Point& P1,
+										  Reference<Matrix4x4>& aArbitraryRotation,
+										  Reference<Matrix4x4>& aArbitraryRotationInv,
+										  Reference<Matrix4x4>& aTranslateToAxis,
+										  Reference<Matrix4x4>& aTranslateToAxisInv );
 
 	bool ComputeNewPositions(Point& aPPrime, Point* p, SamplePointContainer* container);
 	void ComputeSamplePointPosition(vector<float>& aPartialAreaSums, float s, float t);
