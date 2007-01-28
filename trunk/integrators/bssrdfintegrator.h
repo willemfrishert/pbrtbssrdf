@@ -11,7 +11,7 @@ public:
 	// BSSRDFIntegrator Public Methods
 	BSSRDFIntegrator(int ncaus, int ndir, int nindir, int nLookup, int mdepth,
 		float maxdist, bool finalGather, int gatherSamples,
-		bool directWithPhotons, int lightSamples, float epsilon);
+		bool directWithPhotons, int lightSamples, float epsilon, float nPointFactor);
 
 	~BSSRDFIntegrator();
 
@@ -22,6 +22,9 @@ public:
 
 	void Preprocess(const Scene *);
 
+public:
+	static float maxOmega;
+	static float minOmega;
 
 private:
 	// BSSRDFIntegrator Private Methods
@@ -91,4 +94,9 @@ private:
 	 * @description maximum solid angle spanned by the points in a voxel
 	 */
 	float epsilon;
+
+	/**
+	 * @description ...nevermind; just to help computing the number of points
+	 */
+	float nPointFactor;
 };
