@@ -235,6 +235,7 @@ void PointRepulsion::LinkTriangleUseSets()
 			// if neighbor is found, calculate rotation rotation angle, matrices and register neighbors
 			if ( (NULL != vertexNeighbor[0]) && (NULL != vertexNeighbor[1]) )
 			{
+				numberOfNeighbors++;
 				//Reference<Matrix4x4> alignToAxis = new Matrix4x4;
 				//Reference<Matrix4x4> alignToAxisInv = new Matrix4x4;
 				//float rotationAngle;
