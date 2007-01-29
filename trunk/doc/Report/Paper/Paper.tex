@@ -1,0 +1,55 @@
+\documentclass{article}
+
+\title{Rendering Translucent Objects using Subsurface Scattering}
+\author{Jo\~{a}o Pedro Jorge \and Willem Frishert}
+\date{29-01-2007}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+What are translucent objects and subsurface scattering definitions.
+\subsection{BRDF's vs. BSSRDF's}
+Small comparison, providing both equations
+
+\section{Model}
+Introduce the model; mention that it comes from the previous paper and more information can be found in there;
+\subsection{The Diffusion Approximation}
+The idea: comes from medical sciences - the dipole; the importance of multiple scattering - dominant
+\subsection{Two-Pass Technique for Evaluating the Diffusion Approximation}
+Introduction to the two pass techinque: key idea, to make it faster decouple the computation of irradiance...
+\subsubsection{Sampling the Irradiance}
+Good to have uniform distribution of sample points - the authors used Turk's algorithm; Number of points defined by lu and total area; usage of GI techniques;
+equations
+\subsubsection{Evaluating the Diffusion Approximation}
+Can be used directly - heavy, lots of points; speak about the 3 options; hierarchical evaluation: best of both worlds; storage on the tree; subdivision criterion; computation of the radiant exitance and finally computing the Lo for each point.
+input parameters: sigmas
+
+\section{Implementation}
+divided work into two parts: pass1 and pass2; svn server to synch; 
+\subsection{Renderer}
+talk about Renderman; change to PBRT (reasons to change);
+\subsection{First Pass - Sampling The Irradiance}
+Turk's algorithm explanation; usage of basic MC estimator; storage of points on the octree - next section.
+
+\subsection{Second Pass - Evaluating the Diffusion Approximation}
+octree - add and lookup; one or two schemes; the epsilon factor;
+
+\section{Results}
+\section{Conclusion}
+
+% ### BIBLIOGRAPHY ###
+\begin{thebibliography}{99}
+
+%
+% WIKI REFERENCE
+%
+
+\bibitem{WelshParallax} Welsh, Terry, 2004, {\it Parallax Mapping with Offset Limiting: A PerPixel Approximation of Uneven Surfaces}
+
+\bibitem{TatarchukParallax} Tatarchuk, Natalya, 2006, Dynamic Parallax Occlusion Mapping with Approximate Soft Shadows. In {\it Proceedings of the 2006 symposium on Interactive 3D graphics and games SI3D '06}, ACM Press pp. 63-69.
+
+\end{thebibliography}
+
+
+\end{document}
