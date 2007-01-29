@@ -40,7 +40,7 @@ TriangleUseSet::~TriangleUseSet()
 }
 
 
-void TriangleUseSet::GetEdgeNeighbors( vector<TriangleEdge*>& aNeighbor ) const
+void TriangleUseSet::GetEdges( vector<TriangleEdge*>& aNeighbor ) const
 {
 	for (int i=0;i<3;i++)
 	{

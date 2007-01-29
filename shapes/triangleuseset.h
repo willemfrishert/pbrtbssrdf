@@ -66,7 +66,7 @@ public:
 	float GetArea() const;
 	Normal GetNormal() const;
 	void AddEdgeNeightbor( TriangleEdge* aEdgeNeighbor, u_int aPosition );
-	void GetEdgeNeighbors(vector<TriangleEdge*>& aNeighbor) const;
+	void GetEdges(vector<TriangleEdge*>& aNeighbor) const;
 	void GetAllEdgeNeighbors( vector<TriangleEdge*>& aNeighbor ) const;
 	inline int GetTriangleId();
 	Vector GetCentroid();
