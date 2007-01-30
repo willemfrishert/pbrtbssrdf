@@ -108,7 +108,9 @@ void TriangleMesh::Refine(vector<Reference<Shape> > &refined) const
 
 void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, float& pointArea, float meanFreePath ) const
 {
+#ifdef POINTREPULSION_PRINTASCII
 	fstream outfile;
+#endif
 	int numberOfSamplePoints;
 	vector<Reference<Shape> > triangleList;	// container for the triangles
 	Refine( triangleList );
@@ -150,7 +152,6 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 
 		ostringstream ostr;
 		// relaxation of the random points 
-
 		for(int k = 0; k < iNumberOfIterations; k++)
 		{
 			ostr.str("");
@@ -170,7 +171,7 @@ void TriangleMesh::GetUniformPointSamples( vector<UniformPoint>& container, floa
 		}
 		// collect the information
 		pr.FillUniformSamplePointStructure( container );
-//		pointArea = PointRepulsion::CreateTriangleUseSets(triangleList, container, p);
+		//pointArea = PointRepulsion::CreateTriangleUseSets(triangleList, container, p);
 		pointArea = pr.GetTotalSurfaceArea()/numberOfSamplePoints;
 	}
 
