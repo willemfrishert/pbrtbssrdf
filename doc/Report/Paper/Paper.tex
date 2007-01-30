@@ -58,7 +58,7 @@ The diffusion approximation is based on the observation that light tends to beco
 In \cite{PracticalSSS} the diffuse approximation is computed in a single pass  which consumes a fair amount of time. To speed up the computation, Jensen et al. have improved their algorithm in \cite{HierarchicalSSS} by splitting it into a two pass rendering technique. The main idea is to decouple the computation of irradiance from the evaluation of the diffusion approximation. This allows the same irradiance values to be reused for different difussion approximation evaluations. Besides this, they also improve the efficiency for the evaluation of the diffusion approximation.
 
 \subsubsection{Sampling the Irradiance}
-To compute the irradiance on the surface, sample points have to be uniformly distributed over the object surface. The authors propose to use Turk's point repulsion algorithm which uses a relaxation method to spread out the sample points over the surface. The amount of sample points used depends on the surface total area and the mean free path $l_u$. The mean free path stands for the total distance a particle will travel inside the object before is it absorbed. Once the sample points are uniformly spread on the surface we can use global illumination techniques such as photon mapping or irradiance caching to obtain the irradiance at these particular points.
+To compute the irradiance on the surface, sample points have to be uniformly distributed over the object surface. The authors propose to use Turk's point repulsion algorithm \cite{Turk_Point_Repulsion} which uses a relaxation method to spread out the sample points over the surface. The amount of sample points used depends on the surface total area and the mean free path $l_u$. The mean free path stands for the total distance a particle will travel inside the object before is it absorbed. Once the sample points are uniformly spread on the surface we can use global illumination techniques such as photon mapping or irradiance caching to obtain the irradiance at these particular points.
 
 \subsubsection{Evaluating the Diffusion Approximation}
 Can be used directly - heavy, lots of points; speak about the 3 options; hierarchical evaluation: best of both worlds; storage on the tree; subdivision criterion; computation of the radiant exitance and finally computing the Lo for each point.
@@ -75,21 +75,34 @@ The final choice for a renderer was then PBRT. The documentation was excellent a
 Although PBRT is thought to be extended given its plugin nature, modelling a BSSRDF isn't that straightforward (as also mentioned myb the authors on the reference book). Several changes to its core must be made in order to get access to different information. The major changes are related with the {\it Shape, Material, GeometricPrimitive, Triangle and TriangleMesh} objects.
 
 \subsection{First Pass - Sampling The Irradiance}
-To obtain the irradiance at specific points on the objects surface, we used Turk's point repulsion algorithm. Firstly, we created triangle usesets and link them together so the triangles gain more knowledge about their neighbors. Then, in the second part, points are thrown on the triangle mesh and need to be roughly spread. We look a look at some different types of sampling methods and decided in the end to use a low discrepancy sampling method since it was best suited (See \ref{fig:turk_pointrepulsion_before}). Then, as Turk's algorithm mentions, we apply a relaxation technique which consist of two parts. Firstly, sample points compute how much force they exert on each other. In order to do this, the triangles, in which the points lay in, have to be transformed to become coplanar. The second part moves the points into the direction force. Either one of thee cases occurs when moving a point: it stays inside the triangle, it moves over the edge of a triangle onto another triangle or it moves over an edge where there is no neighboring triangle. For the last two cases, we used the knowledge provided by the usesets  to know what will happen to the point. Either it is moved on the edge of the triangle when there is no neighboring triangle or it is moved over the edge onto the new triangle. Mind that in the latter case, we need to rotate the point around the edge to make sure it falls in the triangle. Depending on initial set up of the points on the surface, the relaxation has to be iterated a number of times for the points to settle down. Using the low discrepancy sampling 5 iterators would be enough %(See \ref{fig:turk_pointrepulsion_after}). 
-%\begin{figure}[htbp]
-%  \begin{center}
-%    \mbox{
-%      \subfigure[before relaxation method] {\scalebox{0.3} %{\includegraphics[scale=0.5]{images/repulsion_before.png}}} \quad
-%		\label{fig:turk_pointrepulsion_before}
-%      \subfigure[[after relaxation method]   {\scalebox{0.3} %{\includegraphics[scale=0.5]{images/repulsion_after.png}}}
-%		\label{fig:turk_pointrepulsion_after}
-%      }
-%    \caption{Applying Turk's point repulsion algorithm}
-%    \label{fig:turk_pointrepulsion}
-%  \end{center}
-%\end{figure}
+To obtain the irradiance at specific points on the objects surface, we used Turk's point repulsion algorithm. Firstly, we encapsule the triangles using {\it TriangleUseSets} objects and link them together so the triangles gain more knowledge about their neighbors. A useset also knows information about the triangle such as the normal, the area size and the amount of sample points laying on the triangle surface. Then, in the second part, points are thrown on the triangle mesh and need to be roughly spread. These points are registered in {\it SamplePointContainers} We look a look at some different types of sampling methods and decided in the end to use a low discrepancy sampling method since it was best suited. Then, as Turk's algorithm mentions, we apply a relaxation technique which consist of two parts. Firstly, sample points compute how much force they exert on each other. In order to do this, the triangles, in which the points lay in, have to be transformed to become coplanar. The second part moves the points into the direction force. Either one of thee cases occurs when moving a point: it stays inside the triangle, it moves over the edge of a triangle onto another triangle or it moves over an edge where there is no neighboring triangle. For the last two cases, we used the knowledge provided by the usesets to know what will happen to the point. Either it is moved on the edge of the triangle when there is no neighboring triangle or it is moved over the edge onto the new triangle. Mind that in the latter case, we need to rotate the point around the edge to make sure it falls in the triangle. To debug the position of the sample points we made a small OpenGL application to visualize them. Depending on initial set up of the points on the surface, the relaxation has to be iterated a number of times for the points to settle down. Using the low discrepancy sampling 5 iterators is enough.
+In Figure \ref{fig:turk_pointrepulsion_total} the red points are the initial positions where the points start (see Figure \ref{fig:turk_pointrepulsion_before}), the blue points represent the intermediate position of the points during the relaxation iterators (see Figure \ref{fig:turk_pointrepulsion_during}) and the green points are the indicate the final positions(see Figure \ref{fig:turk_pointrepulsion_after}).
+\begin{figure}[h]
+\centering
+\includegraphics[scale=0.35]{./Pictures/pointrep_total.png}
+\caption{Sample points on the bunny after applying point repulsion.}
+\label{fig:turk_pointrepulsion_total}
+\end{figure}
 
-After the sample points have been uniformly spread, a basic Monte Carlo estimator can be used to calculate the irradiance. The estimator is given as:
+\begin{figure}[htbp]
+  \begin{center}
+    \mbox{
+      \subfigure[before.] { {\includegraphics[scale=1.0]{./Pictures/pointrep_before.png}}} \quad \label{fig:turk_pointrepulsion_before}
+\subfigure[during.] { {\includegraphics[scale=1.0]{./Pictures/pointrep_during.png}}} \quad
+\label{fig:turk_pointrepulsion_during}
+\subfigure[after.] { {\includegraphics[scale=1.0]{./Pictures/pointrep_after.png}}}
+\label{fig:turk_pointrepulsion_after}
+      }
+    \caption{Position of sample points per stage.}
+    \label{fig:turk_before_during_after}
+  \end{center}
+\end{figure}
+
+After the sample points have been uniformly spread, the irradiance can be calculated by sampling all the light sources and integrating over the hemisphere.
+\begin{equation}
+I = \int_{ \Omega  }^{ } L_{sources} \: cos\theta \: sin\theta \:d\phi 
+\end{equation}
+Monte Carlo estimator can be used to calculate the irradiance by sampling all the radiance from all lights and then dividing this by the amount of samples.
 \begin{equation}
 I =  \frac{ \pi }{N } \sum_{i=1}^{ N}L_{sources} \left (  \Theta_i  \right )
 \end{equation}
@@ -117,6 +130,8 @@ octree - add and lookup; one or two schemes; the epsilon factor;
 \bibitem{HierarchicalSSS} H.W. Jensen and J. Buhler, 2002, A rapid hierarchical rendering technique for translucent materials. In {\it Proceedings of the 29th annual conference on Computer graphics and interactive techniques SIGGRAPH '02}, ACM Press pp. 576-581.
 
 \bibitem{PracticalSSS} H.W. Jensen, S.R. Marschner, M. Levoy, and P. Hanrahan, 2001, A practical model for subsurface light transport. In {\it Proceedings of the 28th annual conference on Computer graphics and interactive techniques SIGGRAPH '01}, ACM Press pp. 63-69.
+
+\bibitem{Turk_Point_Repulsion} Turk G., 1992, Re-tiling polygonal surfaces. In {\it Proceedings of the 19th annual conference on Computer graphics and interactive techniques SIGGRAPH '02}, ACM Press pp. 55-64.
 
 \end{thebibliography}
 
