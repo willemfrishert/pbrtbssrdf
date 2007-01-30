@@ -75,12 +75,12 @@ void ParseFile( string fileName, vector<Point3d>& iPoints, bool storeMetaData )
 
 void displayVec(vector<Point3d>& points)
 {
-	glPushMatrix();
+	//glPushMatrix();
 	glTranslatef(0.0, -1.5, 0.0);
 	if (initpoints)
 	{
 		glColor3f(1, 0, 0);
-
+		//glPushMatrix();
 		glEnableClientState( GL_VERTEX_ARRAY );
 		glVertexPointer( 3, GL_FLOAT, 0, &initialPoints[0].x );
 		glDrawArrays(GL_POINTS, 0, numberOfSamples);
@@ -91,7 +91,7 @@ void displayVec(vector<Point3d>& points)
 	if (repelpoints)
 	{
 		glColor3f(0, 0, 1);
-		glPushMatrix();
+		//glPushMatrix();
 		glEnableClientState( GL_VERTEX_ARRAY );
 		glVertexPointer( 3, GL_FLOAT, 0, &turkPoints[0].x );
 		glDrawArrays(GL_POINTS, 0, numberOfForcePoints);
@@ -102,14 +102,14 @@ void displayVec(vector<Point3d>& points)
 	if (endpoints)
 	{
 		glColor3f(0, 1, 0);
-		glPushMatrix();
+		//glPushMatrix();
 		glEnableClientState( GL_VERTEX_ARRAY );
 		glVertexPointer( 3, GL_FLOAT, 0, &endPoints[0].x );
 		glDrawArrays(GL_POINTS, 0, numberOfSamples);
 	
 		glDisableClientState( GL_VERTEX_ARRAY );
 	}
-	glPopMatrix();
+	//glPopMatrix();
 }
 
 void init() {
@@ -134,17 +134,17 @@ void display(void) {
 	glPushMatrix();
 	glTranslatef(0.0, 0, -5.0);
 
-		glPushMatrix();
+		//glPushMatrix();
 			/* "World" rotation, controlled by mouse */
 			glRotatef(xRot, 1, 0, 0);
 			glRotatef(yRot, 0, 1, 0);
 
 			displayVec( initialPoints );
 
-		glPopMatrix();
+		//glPopMatrix();
 
 	glPopMatrix();
-
+	glTranslatef(0.0, 0, -3.75);
 	glColor3f(0, 0, 0);
 	glBegin(GL_QUADS);
 	glVertex3f(-3,-3,0);
