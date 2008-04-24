@@ -13,7 +13,7 @@
 \section{Introduction}
 The implemented project goal was to render translucent objects. Those kind of objects can be seen everywhere, and good examples include marble, alabaster, human skin, plants, cloth, jade and many more.
 All of the mentioned objects materials have in common the fact that they are not completely opaque due to scattering of light inside of them - know as subsurface scattering. Subsurface scattering causes the diffusion of scattered light and the blurring of small details on the surface of the objects.
-Several papers approached these phenomena through the simulation of subsurface scattering. The chosen paper XXX REF XXX was published on SIGGRAPH quite recently and that was the motif that lead to our decision on choosing it. The approach behind the paper extends the diffusion theory present in medical physics related to the measurements of the optical properties of highly scattering materials.
+Several papers approached these phenomena through the simulation of subsurface scattering. The chosen paper \cite{HierarchicalSSS} was published on SIGGRAPH quite recently and that was the motif that lead to our decision on choosing it. The approach behind the paper extends the diffusion theory present in medical physics related to the measurements of the optical properties of highly scattering materials.
 
 
 \subsection{BRDF's vs. BSSRDF's}
@@ -28,7 +28,7 @@ While the well known BRDF (Bidirectional Reflectance Distribution Function) rela
   \end{center}
 \end{figure}
 
-The BSSRDF, $S$, relates the outgoing radiance, $L _o(x _o, \vec{\omega} _o)$ at the point $x _o$ in the direction $\vec{x} _o$, to the incident flux, $\Phi _i(x _i, \vec{\omega} _i)$, at the point $x _i$ from direction $\vec{\omega} _i$:
+The BSSRDF, $S$, relates the outgoing radiance, $L _o(x _o, \vec{\omega} _o)$ at the point $x _o$ in the direction $\vec{\omega} _o$, to the incident flux, $\Phi _i(x _i, \vec{\omega} _i)$, at the point $x _i$ from direction $\vec{\omega} _i$:
 
 \begin{equation}
 dL _o(x _o, \vec{\omega} _o) = S(x _i, \vec{\omega} _i; x _o, \vec{\omega} _o) d\Phi _i(x _i, \vec{\omega} _i)
@@ -55,23 +55,74 @@ Originally, there are 4 parameters that influence the light transport when light
 The diffusion approximation is based on the observation that light tends to become isotropic when multiple scattering occurs beneath the object surface. To approximate the contribution of the multiple scattering events, a dipole diffusion approximation is used. The dipole comes from medical physics and allows us to compute the radiant exitance for points on the surface.
 
 \subsection{Two-Pass Technique for Evaluating the Diffusion Approximation}
-In \cite{PracticalSSS} the diffuse approximation is computed in a single pass  which consumes a fair amount of time. To speed up the computation, Jensen et al. have improved their algorithm in \cite{HierarchicalSSS} by splitting it into a two pass rendering technique. The main idea is to decouple the computation of irradiance from the evaluation of the diffusion approximation. This allows the same irradiance values to be reused for different difussion approximation evaluations. Besides this, they also improve the efficiency for the evaluation of the diffusion approximation.
+In \cite{PracticalSSS} the diffuse approximation is computed in a single pass  which consumes a fair amount of time. To speed up the computation, Jensen et al. have improved their algorithm in \cite{HierarchicalSSS} by splitting it into a two pass rendering technique. The main idea is to decouple the computation of irradiance from the evaluation of the diffusion approximation. This allows the same irradiance values to be reused for different diffusion approximation evaluations. Besides this, they also improve the efficiency for the evaluation of the diffusion approximation.
 
 \subsubsection{Sampling the Irradiance}
-To compute the irradiance on the surface, sample points have to be uniformly distributed over the object surface. The authors propose to use Turk's point repulsion algorithm \cite{Turk_Point_Repulsion} which uses a relaxation method to spread out the sample points over the surface. The amount of sample points used depends on the surface total area and the mean free path $l_u$. The mean free path stands for the total distance a particle will travel inside the object before is it absorbed. Once the sample points are uniformly spread on the surface we can use global illumination techniques such as photon mapping or irradiance caching to obtain the irradiance at these particular points.
+To compute the irradiance on the surface, sample points have to be uniformly distributed over the object surface. The authors propose to use Turk's point repulsion algorithm which uses a relaxation method to spread out the sample points over the surface. The amount of sample points used depends on the surface total area and the mean free path $l_u$. The mean free path stands for the total distance a particle will travel inside the object before is it absorbed. Once the sample points are uniformly spread on the surface we can use global illumination techniques such as photon mapping or irradiance caching to obtain the irradiance at these particular points.
+To compute the irradiance on the surface, sample points have to be uniformly distributed over the object surface. The authors propose to use Turk's point repulsion algorithm \cite{Turk_Point_Repulsion} which uses a relaxation method to spread out the sample points over the surface. The amount of sample points used depends on the surface total area and the mean free path $l_u$. The mean free path stands for the total distance a particle will travel inside the object between collisions with other particles. Once the sample points are uniformly spread on the surface we can use global illumination techniques such as photon mapping or irradiance caching to obtain the irradiance at these particular points.
 
 \subsubsection{Evaluating the Diffusion Approximation}
-Can be used directly - heavy, lots of points; speak about the 3 options; hierarchical evaluation: best of both worlds; storage on the tree; subdivision criterion; computation of the radiant exitance and finally computing the Lo for each point.
-input parameters: sigmas
+\label{sec:diffaprox}
+The Diffusion Approximation can be computed simply by summing the contribution from all the irradiance samples, though that would be computationally expensive, since most objects have thousands of irradiance samples. Using the nearby neighbors could skip some important parts, so an hierarchical evaluation that clusters distant values is the proposed solution in the paper.
+For the hierarchical evaluation, an octree is used to store all the irradiance samples. For each voxel, a tuple containing $E_v$, the total irradiance, $A_v$, the total area represented by the points, and $P_v$, the average location weighted by each sample's irradiance value.
+In order to evaluate the total radiosity at a location $x$ on the surface of the object, the octree must be traversed starting from the root. For each voxel we test if:
+
+\begin{enumerate}
+	\item the location $x$ is inside of it
+	\item if not, check if the voxel "is small enough" 
+\end{enumerate}
+
+The key idea is that of always subdividing the voxels in the path in which $x$ falls in (until we reach a leaf node). For all the other branches/voxels we need to test the \textit{maximum solid angle $\Delta\omega$} spanned by the points in that particular voxel:
+
+\begin{equation}
+\Delta\omega = \frac{A_v}{||x - P_v||^2}
+\end{equation}
+
+The value of $\Delta\omega$ must be compared with a certain $\epsilon$ provided by the user. The smaller that $\epsilon$ is, the more accurate and slow the search will be. In Figure \ref{Octree} a typical search can be seen. For the sake of simplicity we have omitted the middle nodes (2 till 7).
+
+\begin{figure}[tbh]
+\centering
+\includegraphics[scale=0.5]{./Pictures/Octree.png}
+\caption{Point $x$ (red star) falls on the leftmost node; the other nodes are compared with the $\epsilon$ value until they reach the condition is fulfilled.}
+\label{Octree}
+\end{figure}
+
+The radiant exitance/radiosity $M_{o,p}$ at $x$ from a given irradiance sample (or for clustered samples, the clustered values) is given by the following equation:
+
+\begin{equation}
+M_{o,p}(x) = F_{dt}(x) \frac{dM_o(x)}{d\Phi _i(P_p)\alpha ^{\prime}} E_p A_p
+\end{equation}
+
+where $E_p, A_p$ and $P_p$ are the irradiance sample (or clustered sample) values and $\frac{dM_o(x)}{d\Phi _i(P_p)\alpha ^{\prime}}$ can be evaluated using the following equation:
+
+\begin{equation}
+\frac{dM_o(x_o)}{d\Phi _i(x_i)\alpha ^{\prime}} = \frac{1}{4\pi}
+\left\{ 
+z_r ( {\sigma}_{tr} + \frac{1}{d_r} ) \frac{e^{-{\sigma} _{t_r} d_r}}{d _r ^2} + 
+z_v ( {\sigma}_{tr} + \frac{1}{d_v} ) \frac{e^{-{\sigma} _{t_r} d_v}}{d _v ^2}
+\right\}
+\end{equation}
+
+More details about the above parameters can be found in \cite{HierarchicalSSS}.
+
+Finally, the result of traversing and evaluating the voxels is an estimate of the total (diffuse) radiosity, $M_o$ at $x$, which is converted into radiance by:
+
+\begin{equation}
+L_o(x,\vec{\omega}) = \frac{F_t(x,\vec{\omega})}{F_{dr}(x)}\frac{M_o(x)}{\pi}
+\end{equation}
+
+The parameters that serve passed by the user as an input to these equations are: the  reduced scattering coefficient, ${\sigma} _s ^{\prime}$, the absorption coefficient, ${\sigma} _a$, and the material's index of refraction: $\eta$.
 
 \section{Implementation}
-The implementation was initially divided into two parts: uniformly sampling the points and the hierarchical evaluation. However, the point sampling took much more time than it was expected and the work continued in that very same direction. It should be noticed that both of us knew the other one's part and the for several times we worked together in only one part.\linebreak
-The code versioning and backup was done using Google Project Hosting SVN server\textbf{  XXX SHOULD WE PUT HERE THE LINK ???? XXX}. In this way the synchronization of the code made by both was easy, secure and straightforward.
+The implementation was initially divided into two parts: uniformly sampling the points and the hierarchical evaluation. However, the point sampling took much more time than it was expected and the work continued in that very same direction. It should be noticed that both of us knew the other one's part and the for several times we worked together in only one part.
+
+The code versioning and backup was done using Google Project Hosting SVN server \cite{SVN}. In this way the synchronization of the code made by both was easy, secure and straightforward.
 
 \subsection{Renderer}
-The initial proposal for a renderer mentioned a Pixar's RenderMan$^{\textregistered}$ compliant opensource renderer. The choice made was Pixie XXX Ref to it XXX. The framework seemed to be pretty stable and up-to-date. After several days studying RenderMan$^{\textregistered}$'s specification and trying to understand Pixie's implementation we decided that it was unrealistic to use it due to the lack of documentation and due to Renderman's low support for ray-tracing.\linebreak
-The final choice for a renderer was then PBRT. The documentation was excellent and the renderer seemed to be widely used on the academic environment.\linebreak
-\textbf{ XXX SHOULD WE TALK HERE ABOUT PBRT'S SET UP TIME ??? XXX }
+The initial proposal for a renderer mentioned a Pixar's RenderMan{\textregistered} compliant opensource renderer. The choice made was Pixie. The framework seemed to be pretty stable and up-to-date. After several days studying RenderMan{\textregistered}'s specification and trying to understand Pixie's implementation we decided that it was unrealistic to use it due to the lack of documentation and due to Renderman's low support for ray-tracing.
+
+The final choice for a renderer was then PBRT\cite{PBRTBook}. The documentation was excellent and the renderer seemed to be widely used on the academic environment.
+
 Although PBRT is thought to be extended given its plugin nature, modelling a BSSRDF isn't that straightforward (as also mentioned myb the authors on the reference book). Several changes to its core must be made in order to get access to different information. The major changes are related with the {\it Shape, Material, GeometricPrimitive, Triangle and TriangleMesh} objects.
 
 \subsection{First Pass - Sampling The Irradiance}
@@ -87,49 +138,61 @@ In Figure \ref{fig:turk_pointrepulsion_total} the red points are the initial pos
 \begin{figure}[htbp]
   \begin{center}
     \mbox{
-      \subfigure[before.] { {\includegraphics[scale=1.0]{./Pictures/pointrep_before.png}}} \quad \label{fig:turk_pointrepulsion_before}
-\subfigure[during.] { {\includegraphics[scale=1.0]{./Pictures/pointrep_during.png}}} \quad
-\label{fig:turk_pointrepulsion_during}
-\subfigure[after.] { {\includegraphics[scale=1.0]{./Pictures/pointrep_after.png}}}
-\label{fig:turk_pointrepulsion_after}
+      \subfigure[before.] { {\label{fig:turk_pointrepulsion_before}\includegraphics[scale=1.0]{./Pictures/pointrep_before.png}}} \quad 
+\subfigure[during.] {\label{fig:turk_pointrepulsion_during} {\includegraphics[scale=1.0]{./Pictures/pointrep_during.png}}} \quad
+\subfigure[after.] {\label{fig:turk_pointrepulsion_after} {\includegraphics[scale=1.0]{./Pictures/pointrep_after.png}}}
       }
     \caption{Position of sample points per stage.}
     \label{fig:turk_before_during_after}
   \end{center}
 \end{figure}
 
-After the sample points have been uniformly spread, the irradiance can be calculated by sampling all the light sources and integrating over the hemisphere.
+After the sample points have been uniformly spread, the irradiance can be calculated by sampling all the light sources and integrating over the hemisphere:
 \begin{equation}
 I = \int_{ \Omega  }^{ } L_{sources} \: cos\theta \: sin\theta \:d\phi 
 \end{equation}
-Monte Carlo estimator can be used to calculate the irradiance by sampling all the radiance from all lights and then dividing this by the amount of samples.
+Monte Carlo estimator can be used to calculate the irradiance by sampling all the radiance from all lights and then dividing this by the amount of samples:
 \begin{equation}
 I =  \frac{ \pi }{N } \sum_{i=1}^{ N}L_{sources} \left (  \Theta_i  \right )
 \end{equation}
 
 \subsection{Second Pass - Evaluating the Diffusion Approximation}
+As the authors of the paper, we use an octree to store the irradiance values. Each voxel contains an object, \textit{IrradSample} that stores the 3-tuple spoken on Section  \ref{sec:diffaprox}. For the search another object \textit{IrradProc} is used to retrieve and compute the radiance value for each hit on the object.
 
-For the hierarchical evaluation, like the authors of the paper, we used an octree to store all our irradiance samples. In order to evaluate the total radiosity at a location $x$ on the surface of the object, the octree must be traversed starting from the root. For each voxel we test if:
+The $\epsilon$ value is based on empirical values based on several tests and on the depth of the three used. The latter is computed in order to have a maximum of 8 samples per leaf node:
 
-
-\begin{figure}[tbh]
-\centering
-\includegraphics[scale=0.5]{./Pictures/Octree.png}
-\caption{}
-\label{Hierarchical Evaluation}
-\end{figure}
-
-octree - add and lookup; one or two schemes; the epsilon factor;
+\begin{equation}
+Depth = Round(\log_8(number of samples))
+\end{equation}
 
 \section{Results}
+The obtained results can be seen on Figures \ref{fig:buddha} and \ref{fig:bunny}. Comparing the obtained results with Jensen's results, we are glad with accomplishments. Some of the results obtained by Jensen can be observed in the original paper \cite{HierarchicalSSS}.
+
+\begin{figure}
+\centering
+\subfigure[Stanford's Happy Buddha - low resolution picture]{\label{fig:buddha}\includegraphics[scale=0.5]{./Pictures/buddha_marble.png}} 
+\subfigure[Stanford's Bunny - low resolution picture]{\label{fig:bunny}\includegraphics[scale=0.6]{./Pictures/bunny.png}} 
+\caption{(a) 300.000 triangles model; rendered in 1 hour. (b) 70.000 triangles (with point repulsion); rendered in 20 minutes.}
+\label{fig:ourresults}
+\end{figure}
+
 \section{Conclusion}
+In this project we have rendered translucent objects with the technique described in \cite{HierarchicalSSS}. The technique has demonstrated to be quite slow, even if some improvements could be made on the code to make it run faster. Furthermore, the results obtained, given the input passed from the user, are quite difficult to predict. The authors provide some measured materials, and given those values we managed to render a Pink Marble Buddha. The rendered picture has some aliasing artifacts due to the fact that the model is not the full resolution version, and therefore some triangles have no area and there are some corrupt normals as well. Much better results would be achieved using the 500.000 triangles model (full resolution Stanford Buddha).
+
+The implemented Turk's Point Repulsion algorithm demonstrated to be quite inefficient for large meshes (more than 100.000 triangles), but we managed to, with only 5 iterations, achieve an excellent result. Unfortunately, this algorithm took half of the development time.
+
+Improvements to our implementation might pass by a more efficient computation of irradiance values and usage of photon mapping to compute those values so we could achieve effects like caustics. Adding specular highlights to the translucent object might as well add some realism in some cases.
 
 % ### BIBLIOGRAPHY ###
 \begin{thebibliography}{99}
 
-\bibitem{HierarchicalSSS} H.W. Jensen and J. Buhler, 2002, A rapid hierarchical rendering technique for translucent materials. In {\it Proceedings of the 29th annual conference on Computer graphics and interactive techniques SIGGRAPH '02}, ACM Press pp. 576-581.
+\bibitem{HierarchicalSSS} Jensen, H.W.  and Buhler, J., 2002, A rapid hierarchical rendering technique for translucent materials. In {\it Proceedings of the 29th annual conference on Computer graphics and interactive techniques SIGGRAPH '02}, ACM Press pp. 576-581.
 
-\bibitem{PracticalSSS} H.W. Jensen, S.R. Marschner, M. Levoy, and P. Hanrahan, 2001, A practical model for subsurface light transport. In {\it Proceedings of the 28th annual conference on Computer graphics and interactive techniques SIGGRAPH '01}, ACM Press pp. 63-69.
+\bibitem{PracticalSSS} Jensen, H.W., Marschner, S.R., Levoy, M., and Hanrahan, P., 2001, A practical model for subsurface light transport. In {\it Proceedings of the 28th annual conference on Computer graphics and interactive techniques SIGGRAPH '01}, ACM Press pp. 63-69.
+
+\bibitem{SVN} Jorge, J. P., and Frishert, W. 2007. Rendering Translucent Objects SVN Repository. In {\it SVN Repository - http:\slash \slash code.google.com\slash p\slash pbrtbssrdf}.
+
+\bibitem{PBRTBook} Pharr, M., Humphreys, G., 2004, Physically Based Rendering: From Theory To Implementation. The Morgan Kaufmann Series in Interactive 3D Technology.
 
 \bibitem{Turk_Point_Repulsion} Turk G., 1992, Re-tiling polygonal surfaces. In {\it Proceedings of the 19th annual conference on Computer graphics and interactive techniques SIGGRAPH '02}, ACM Press pp. 55-64.
 
