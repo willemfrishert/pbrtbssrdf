@@ -10,15 +10,15 @@ Bookmark#6=0
 Bookmark#7=0
 Bookmark#8=0
 Bookmark#9=0
-CaretPos.X=20
-CaretPos.Y=38
+CaretPos.X=172
+CaretPos.Y=192
 CharSet=def
 FileName=Paper.tex
 FoldedLines=
 IsMainFile=yes
 Opened=yes
 ScrollPos.X=0
-ScrollPos.Y=38
+ScrollPos.Y=335
 SearchListCount=0
 ShowSyntax=yes
 SpellChecking=yes
@@ -101,7 +101,7 @@ Page=0
 Zoom=9
 
 [Project\DVI\1]
-Page=1
+Page=0
 Zoom=5
 
 [Project\DVI\2]
@@ -140,7 +140,7 @@ Zoom=9
 FileName=1
 FirstPage=0
 Magnifier=5
-Page=0
+Page=1
 PaperHeight=297
 PaperWidth=210
 Zoom=6
